@@ -63,7 +63,7 @@ lazy val root = (project in file("."))
     libraryDependencies ++= Seq(
 //      "co.fs2" %% "fs2-core" % "3.12.2",
 //      "co.fs2" %% "fs2-io" % "3.12.2",
-//      "com.comcast" %% "ip4s-core" % "3.7.0",
+      "com.comcast" %% "ip4s-core" % "3.7.0",
 //      "com.github.cb372" %% "cats-retry" % "4.0.0",
       "com.lihaoyi" %% "os-lib" % "0.11.6" % Test,
       "com.lihaoyi" %% "sourcecode" % "0.4.4",
@@ -82,6 +82,9 @@ lazy val root = (project in file("."))
       "org.camunda.bpm.model" % "camunda-bpmn-model" % "7.24.0",
       "org.business4s" %% "workflows4s-bpmn" % "0.4.2",
       "org.business4s" %% "workflows4s-core" % "0.4.2",
+      "org.http4s" %% "http4s-circe" % "0.23.33",
+      "org.http4s" %% "http4s-client" % "0.23.33",
+      "org.http4s" %% "http4s-ember-client" % "0.23.33",
 //      "org.typelevel" %% "log4cats-core" % "2.7.1",
       "org.typelevel" %% "log4cats-slf4j" % "2.7.1" % Test,
     ),
