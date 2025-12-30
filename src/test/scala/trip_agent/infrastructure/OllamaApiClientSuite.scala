@@ -40,3 +40,5 @@ object OllamaApiClientSuite extends SimpleIOSuite:
 
   private lazy val timeout = 2.minutes
   private lazy val verbose = true
+
+  override def maxParallelism = 1

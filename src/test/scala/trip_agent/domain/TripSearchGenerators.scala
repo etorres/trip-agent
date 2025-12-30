@@ -3,40 +3,66 @@ package trip_agent.domain
 
 import trip_agent.spec.EmailGenerators.emailAddressGen
 import trip_agent.spec.StringGenerators.alphaNumericStringBetween
+import trip_agent.spec.TemporalGenerators.zonedDateTimeGen
 
-import cats.implicits.toTraverseOps
+import cats.implicits.{catsSyntaxTuple6Semigroupal, toTraverseOps}
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.genInstances
 
+import java.time.ZonedDateTime
 import scala.util.Random
 
 object TripSearchGenerators:
-  private val accommodationIdGen = alphaNumericStringBetween(3, 12)
+  private val accommodationIdGen = Gen.choose(1, Int.MaxValue)
 
   def accommodationGen(
-      idGen: Gen[String] = accommodationIdGen,
+      idGen: Gen[Int] = accommodationIdGen,
+      nameGen: Gen[String] = alphaNumericStringBetween(3, 12),
+      neighborhoodGen: Gen[String] = alphaNumericStringBetween(3, 12),
+      checkinGen: Gen[ZonedDateTime] = zonedDateTimeGen,
+      checkoutGen: Gen[ZonedDateTime] = zonedDateTimeGen,
+      pricePerNightGen: Gen[Int] = Gen.choose(10, 100),
   ): Gen[Accommodation] =
-    idGen.map(Accommodation.apply)
+    (
+      idGen,
+      nameGen,
+      neighborhoodGen,
+      checkinGen,
+      checkoutGen,
+      pricePerNightGen,
+    ).mapN(Accommodation.apply)
 
   val accommodationsGen: Gen[List[Accommodation]] =
     for
       size <- Gen.choose(1, 3)
-      ids <- Gen.containerOfN[Set, String](size, accommodationIdGen)
-      accommodations <- ids.toList.traverse:
-        accommodationGen(_)
+      ids <- Gen.containerOfN[Set, Int](size, accommodationIdGen)
+      accommodations <- ids.toList.traverse: id =>
+        accommodationGen(idGen = id)
     yield accommodations
 
-  private val flightIdGen = alphaNumericStringBetween(3, 12)
+  private val flightIdGen = Gen.choose(1, Int.MaxValue)
 
   def flightGen(
-      idGen: Gen[String] = flightIdGen,
+      idGen: Gen[Int] = flightIdGen,
+      fromGen: Gen[String] = alphaNumericStringBetween(3, 12),
+      toGen: Gen[String] = alphaNumericStringBetween(3, 12),
+      departureGen: Gen[ZonedDateTime] = zonedDateTimeGen,
+      arrivalGen: Gen[ZonedDateTime] = zonedDateTimeGen,
+      priceGen: Gen[Int] = Gen.choose(10, 100),
   ): Gen[Flight] =
-    idGen.map(Flight.apply)
+    (
+      idGen,
+      fromGen,
+      toGen,
+      departureGen,
+      arrivalGen,
+      priceGen,
+    ).mapN(Flight.apply)
 
   val flightsGen: Gen[List[Flight]] =
     for
       size <- Gen.choose(1, 3)
-      ids <- Gen.containerOfN[Set, String](size, flightIdGen)
+      ids <- Gen.containerOfN[Set, Int](size, flightIdGen)
       flights <- ids.toList.traverse:
         flightGen(_)
     yield flights
