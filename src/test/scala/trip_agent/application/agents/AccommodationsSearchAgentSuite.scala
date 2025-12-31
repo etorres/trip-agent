@@ -13,6 +13,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 import weaver.SimpleIOSuite
 
 import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit.DAYS
 
 object AccommodationsSearchAgentSuite extends SimpleIOSuite:
   test("should find accommodations based on user-provided information"):
@@ -40,10 +41,20 @@ object AccommodationsSearchAgentSuite extends SimpleIOSuite:
       &&
       forEach(obtained): accommodation =>
         expect(
-          !accommodation.checkin.isBefore(checkin) &&
-            !accommodation.checkout.isAfter(checkout),
+          clue(!accommodation.checkin.isBefore(checkin)) &&
+            clue(!accommodation.checkout.isAfter(checkout)),
         )
       &&
-      expect(obtained.map(_.pricePerNight).sum <= 600) // FIXME
+      forEach(obtained): accommodation =>
+        val stayInDays =
+          DAYS
+            .between(
+              accommodation.checkin,
+              accommodation.checkout,
+            )
+            .toInt
+        val totalPrice =
+          math.max(1, stayInDays) * accommodation.pricePerNight
+        expect(clue(totalPrice) <= 600)
 
   override def maxParallelism: Int = 1
