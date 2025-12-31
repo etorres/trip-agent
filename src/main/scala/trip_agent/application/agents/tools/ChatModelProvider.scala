@@ -11,7 +11,7 @@ import dev.langchain4j.model.ollama.OllamaChatModel
 
 import java.time.Duration
 
-final class ModelProvider(
+final class ChatModelProvider(
     ollamaApiClient: OllamaApiClient,
     config: OllamaConfig,
 ):
@@ -30,7 +30,7 @@ final class ModelProvider(
           .supportedCapabilities(RESPONSE_FORMAT_JSON_SCHEMA)
           .temperature(0.2d)
           .timeout(Duration.ofMinutes(2L))
-          .topK(5)
-          .topP(0.15d)
+          .topK(20)
+          .topP(0.9d)
           .build()
     yield chatModel

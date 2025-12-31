@@ -1,0 +1,6 @@
+Find ONLY accommodations within the following constraints "{{question}}".
+Ignore any constraints that don't refer accommodations.
+If some error shows in the tool you are using do not provide any accommodations.
+To create your answer, use the following list of available accommodations,
+which is already filtered by check-in and check-out dates:
+{{availabilities}}

@@ -22,11 +22,7 @@ Your response should follow a JSON schema like the following:
         ...
     ]
 }
+Use the ISO-8601 format YYYY-MM-DDTHH:mm:ssZ (for UTC) for checkin and checkout dates.
 Do not include any explanations or text outside the JSON structure.
 If no accommodations are found then your response must be:
 { "accommodations":[] }
-Find ONLY accommodations within the following constraints "{{question}}".
-Ignore any constraints that don't refer accommodations.
-If some error shows in the tool you are using do not provide any accommodations.
-The list of available accommodations is as follows:
-{{availabilities}}

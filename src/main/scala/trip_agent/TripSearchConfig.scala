@@ -24,3 +24,4 @@ object TripSearchConfig:
     enum OllamaModel(val name: String) derives Show:
       case PHI3 extends OllamaModel("phi3:3.8b")
       case MISTRAL extends OllamaModel("mistral:7b")
+      case DEEPSEEK_R1 extends OllamaModel("deepseek-r1:8b")

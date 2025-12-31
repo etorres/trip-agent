@@ -47,7 +47,7 @@ lazy val withCatsEffect: Project => Project =
     _.settings(
       libraryDependencies ++= Seq(
         "io.chrisdavenport" %% "cats-scalacheck" % "0.3.2" % Test,
-        "org.typelevel" %% "cats-collections-core" % "0.9.10" % Test,
+        "org.typelevel" %% "cats-collections-core" % "0.9.10",
         "org.typelevel" %% "cats-core" % "2.13.0",
         "org.typelevel" %% "cats-effect" % "3.6.3",
         "org.typelevel" %% "cats-effect-kernel" % "3.6.3",
@@ -97,7 +97,7 @@ lazy val root = (project in file("."))
       "org.http4s" %% "http4s-ember-client" % "0.23.33",
       "org.typelevel" %% "case-insensitive" % "1.5.0",
       "org.typelevel" %% "log4cats-core" % "2.7.1",
-      "org.typelevel" %% "log4cats-slf4j" % "2.7.1" % Test,
+      "org.typelevel" %% "log4cats-slf4j" % "2.7.1",
       "org.typelevel" %% "vault" % "3.6.0",
     ),
   )

@@ -1,18 +1,25 @@
 package es.eriktorr
 package trip_agent
 
+import trip_agent.TripSearchConfig.OllamaConfig
+import trip_agent.TripSearchConfig.OllamaConfig.OllamaModel
+import trip_agent.application.agents.tools.{ChatModelProvider, DateExtractor}
 import trip_agent.application.agents.{
   AccommodationsSearchAgent,
   FlightsSearchAgent,
   MailSenderAgent,
 }
-import trip_agent.application.{BookingService, TripSearchWorkflow}
-import trip_agent.infrastructure.TSIDGen
+import trip_agent.application.{AccommodationService, BookingService, TripSearchWorkflow}
+import trip_agent.infrastructure.HttpClient.httpClientWith
+import trip_agent.infrastructure.{OllamaApiClient, TSIDGen}
 
-import cats.effect.{ExitCode, IO}
+import cats.effect.{ExitCode, IO, Resource}
+import com.comcast.ip4s.{host, port}
 import com.monovore.decline.Opts
 import com.monovore.decline.effect.CommandIOApp
 import org.camunda.bpm.model.bpmn.Bpmn
+import org.typelevel.log4cats.StructuredLogger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import workflows4s.bpmn.BpmnRenderer
 import workflows4s.runtime.InMemoryRuntime
 import workflows4s.runtime.instanceengine.WorkflowInstanceEngine
@@ -29,12 +36,36 @@ object TripSearchApplication
         knockerUpper <- SleepingKnockerUpper.create()
         registry <- InMemoryWorkflowRegistry().toResource
         engine = WorkflowInstanceEngine.default(knockerUpper, registry)
-        tripSearchWorkflow = TripSearchWorkflow(
-          accommodationsSearchAgent = AccommodationsSearchAgent.impl,
-          flightsSearchAgent = FlightsSearchAgent.impl,
-          mailSenderAgent = MailSenderAgent.impl,
-          bookingService = BookingService.impl,
-        )
+        given StructuredLogger[IO] <- Resource.eval(Slf4jLogger.create[IO])
+        httpClient <- httpClientWith()
+        tripSearchWorkflow <-
+          val config = OllamaConfig(
+            host = host"localhost",
+            insecure = true,
+            model = OllamaModel.PHI3,
+            port = port"11434",
+          )
+          val chatModelProvider = ChatModelProvider(
+            ollamaApiClient = OllamaApiClient.impl(
+              config = config,
+              httpClient = httpClient,
+            ),
+            config = config,
+          )
+          Resource.eval:
+            for
+              chatModel <- chatModelProvider.chatModel(verbose = false)
+              tripSearchWorkflow = TripSearchWorkflow(
+                accommodationsSearchAgent = AccommodationsSearchAgent.impl(
+                  accommodationService = AccommodationService.impl,
+                  chatModel = chatModel,
+                  dateExtractor = DateExtractor.impl(chatModel),
+                ),
+                flightsSearchAgent = FlightsSearchAgent.impl,
+                mailSenderAgent = MailSenderAgent.impl,
+                bookingService = BookingService.impl,
+              )
+            yield tripSearchWorkflow
         runtime <- InMemoryRuntime
           .default[TripSearchWorkflow.TripSearchContext.Ctx](
             workflow = tripSearchWorkflow.workflow,

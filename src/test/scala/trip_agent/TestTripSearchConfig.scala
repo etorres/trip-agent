@@ -27,6 +27,15 @@ object TestTripSearchConfig:
             port = Port.fromInt(TestOllamaConfig.port).get,
           ),
         )
+    case deepSeekR1LocalContainer
+        extends TestOllamaConfig(
+          OllamaConfig(
+            host = Host.fromString(TestOllamaConfig.host).get,
+            insecure = TestOllamaConfig.insecure,
+            model = OllamaModel.DEEPSEEK_R1,
+            port = Port.fromInt(TestOllamaConfig.port).get,
+          ),
+        )
 
   object TestOllamaConfig:
     final private val host = "localhost"
