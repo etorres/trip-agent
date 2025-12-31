@@ -2,6 +2,7 @@ package es.eriktorr
 package trip_agent.application.agents
 
 import trip_agent.application.AccommodationService
+import trip_agent.application.agents.tools.AvailabilityLoader.addToScope
 import trip_agent.application.agents.tools.DateExtractor
 import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
 import trip_agent.domain.Accommodation
@@ -9,14 +10,11 @@ import trip_agent.infrastructure.data.retry.IOExtensions.retryOnError
 
 import cats.effect.IO
 import cats.implicits.showInterpolator
-import dev.langchain4j.agentic.AgenticServices.AgenticScopeAction
-import dev.langchain4j.agentic.scope.AgenticScope
 import dev.langchain4j.agentic.{Agent, AgenticServices}
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{SystemMessage, UserMessage, V}
 import io.circe.Decoder
 import io.circe.parser.parse
-import io.circe.syntax.EncoderOps
 import org.typelevel.log4cats.StructuredLogger
 
 trait AccommodationsSearchAgent:
@@ -38,11 +36,7 @@ object AccommodationsSearchAgent:
           AgenticServices
             .sequenceBuilder()
             .subAgents(
-              AgenticServices.agentAction(
-                new AgenticScopeAction.NonThrowingConsumer[AgenticScope]:
-                  override def accept(agenticScope: AgenticScope): Unit =
-                    agenticScope.writeState("availabilities", availabilities.asJson.noSpaces),
-              ),
+              addToScope(availabilities),
               AgenticServices
                 .agentBuilder(classOf[AccommodationsSearchExpert])
                 .chatModel(chatModel)
@@ -59,8 +53,9 @@ object AccommodationsSearchAgent:
               .asInstanceOf[String],
           )
         accommodations <- IO.fromEither(parse(answer).flatMap(_.as[Accommodations]))
-      yield accommodations.accommodations)
-        .retryOnError(handled = classOf[java.net.http.HttpTimeoutException])
+      yield accommodations.accommodations).retryOnError(
+        handled = classOf[java.net.http.HttpTimeoutException],
+      )
 
   private trait AccommodationsSearchExpert:
     @SystemMessage(fromResource = "accommodations_search/system_message.txt")

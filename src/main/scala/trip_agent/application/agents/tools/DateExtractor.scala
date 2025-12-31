@@ -23,7 +23,7 @@ object DateExtractor:
   )(using logger: StructuredLogger[IO]): DateExtractor =
     (question: String) =>
       for
-        _ <- logger.info(show"Extracting check-in and check-out dates from: \"$question\"")
+        _ <- logger.info(show"Extracting stay dates from: \"$question\"")
         assistant = AiServices.create(classOf[Assistant], chatModel)
         answer <- IO.blocking(assistant.findDates(question))
         stay = decode[Stay](answer).fold(throw _, identity)

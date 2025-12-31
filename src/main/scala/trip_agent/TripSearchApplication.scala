@@ -9,7 +9,12 @@ import trip_agent.application.agents.{
   FlightsSearchAgent,
   MailSenderAgent,
 }
-import trip_agent.application.{AccommodationService, BookingService, TripSearchWorkflow}
+import trip_agent.application.{
+  AccommodationService,
+  BookingService,
+  FlightService,
+  TripSearchWorkflow,
+}
 import trip_agent.infrastructure.HttpClient.httpClientWith
 import trip_agent.infrastructure.{OllamaApiClient, TSIDGen}
 
@@ -61,7 +66,11 @@ object TripSearchApplication
                   chatModel = chatModel,
                   dateExtractor = DateExtractor.impl(chatModel),
                 ),
-                flightsSearchAgent = FlightsSearchAgent.impl,
+                flightsSearchAgent = FlightsSearchAgent.impl(
+                  flightService = FlightService.impl,
+                  chatModel = chatModel,
+                  dateExtractor = DateExtractor.impl(chatModel),
+                ),
                 mailSenderAgent = MailSenderAgent.impl,
                 bookingService = BookingService.impl,
               )

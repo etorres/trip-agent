@@ -1,0 +1,6 @@
+Find ONLY flights within the following constraints "{{question}}".
+Ignore any constraints that don't refer flights
+If some error shows in the tool you are using do not provide any flights.
+To create your answer, use the following list of available flights,
+which is already filtered by departure and arrival dates:
+{{availabilities}}
