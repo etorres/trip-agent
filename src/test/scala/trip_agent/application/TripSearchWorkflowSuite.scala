@@ -18,7 +18,6 @@ import trip_agent.application.agents.{
 }
 import trip_agent.domain.TripSearchGenerators.{accommodationsGen, flightsGen, questionGen}
 import trip_agent.domain.{Accommodation, Flight, TripSearch}
-import trip_agent.infrastructure.TSIDGen
 import trip_agent.spec.StringGenerators.alphaNumericStringBetween
 
 import cats.derived.*
@@ -75,8 +74,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
           testResources(engine, testCase.accommodations, testCase.flights).use:
             (runtime, mailsStateRef, bookingsStateRef) =>
               for
-                tsid <- TSIDGen[IO].randomTSID
-                workflowInstance <- runtime.createInstance(tsid.toString)
+                workflowInstance <- runtime.createInstance(testCase.requestId)
                 _ <- workflowInstance.deliverSignal(
                   TripSearchSignal.findTrip,
                   TripSearchSignal.FindTrip(testCase.question),
@@ -142,52 +140,58 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
     yield (runtime, mailsStateRef, bookingsStateRef)
 
   final private case class TestCase(
+      requestId: String,
       question: String,
       accommodations: Map[String, List[Accommodation]],
       flights: Map[String, List[Flight]],
       expectedState: TripSearchState,
       otherPossibleState: Option[TripSearchState],
-      expectedMails: List[(List[Accommodation], List[Flight], String)],
+      expectedMails: List[(List[Accommodation], List[Flight], String, String)],
       expectedBooking: List[(String, List[Accommodation], List[Flight])],
   ) derives Eq,
         Show
 
   private lazy val bookTripTestCaseGen =
     for
+      requestId <- Gen.uuid.map(_.toString)
       question <- questionGen
       accommodations <- accommodationsGen
       flights <- flightsGen
       emailAddress = FakeMailSenderAgent.findEmailUnsafe(question)
     yield TestCase(
+      requestId = requestId,
       question = question,
       accommodations = Map(question -> accommodations),
       flights = Map(question -> flights),
       expectedState = TripSearchState.Booked(),
       otherPossibleState = None,
-      expectedMails = List((accommodations, flights, question)),
+      expectedMails = List((accommodations, flights, question, requestId)),
       expectedBooking = List((emailAddress, accommodations, flights)),
     )
 
   private lazy val missingEmailTestCaseGen =
-    alphaNumericStringBetween(3, 12)
-      .retryUntil: question =>
-        TripSearch.findEmail(question).isEmpty
-      .map: question =>
-        TestCase(
-          question = question,
-          accommodations = Map.empty,
-          flights = Map.empty,
-          expectedState = TripSearchState.Canceled(
-            state = TripSearchState.Empty,
-            reason = TripSearchError.MissingEmail,
-          ),
-          otherPossibleState = None,
-          expectedMails = List.empty,
-          expectedBooking = List.empty,
-        )
+    for
+      requestId <- Gen.uuid.map(_.toString)
+      question <- alphaNumericStringBetween(3, 12)
+        .retryUntil: question =>
+          TripSearch.findEmail(question).isEmpty
+    yield TestCase(
+      requestId = requestId,
+      question = question,
+      accommodations = Map.empty,
+      flights = Map.empty,
+      expectedState = TripSearchState.Canceled(
+        state = TripSearchState.Empty,
+        reason = TripSearchError.MissingEmail,
+      ),
+      otherPossibleState = None,
+      expectedMails = List.empty,
+      expectedBooking = List.empty,
+    )
 
   private lazy val incompleteTestCaseGen =
     for
+      requestId <- Gen.uuid.map(_.toString)
       question <- questionGen
       (accommodations, flights) <- Gen.frequency(
         1 -> accommodationsGen.map(_ -> List.empty),
@@ -195,6 +199,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
         1 -> Gen.const(List.empty -> List.empty),
       )
     yield TestCase(
+      requestId = requestId,
       question = question,
       accommodations = Map(question -> accommodations),
       flights = Map(question -> flights),
@@ -214,11 +219,13 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
 
   private lazy val rejectedTestCaseGen =
     for
+      requestId <- Gen.uuid.map(_.toString)
       question <- questionGen
       accommodations <- accommodationsGen
       flights <- flightsGen
       emailAddress = FakeMailSenderAgent.findEmailUnsafe(question)
     yield TestCase(
+      requestId = requestId,
       question = question,
       accommodations = Map(question -> accommodations),
       flights = Map(question -> flights),
@@ -227,6 +234,6 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
         reason = TripSearchError.Rejected,
       ),
       otherPossibleState = None,
-      expectedMails = List((accommodations, flights, question)),
+      expectedMails = List((accommodations, flights, question, requestId)),
       expectedBooking = List.empty,
     )

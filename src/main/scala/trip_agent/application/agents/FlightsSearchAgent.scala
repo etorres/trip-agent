@@ -2,6 +2,7 @@ package es.eriktorr
 package trip_agent.application.agents
 
 import trip_agent.application.FlightService
+import trip_agent.application.agents.tools.AnswerProcessor.stripCodeFences
 import trip_agent.application.agents.tools.AvailabilityLoader.addToScope
 import trip_agent.application.agents.tools.DateExtractor
 import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
@@ -10,6 +11,7 @@ import trip_agent.infrastructure.data.retry.IOExtensions.retryOnError
 
 import cats.effect.IO
 import cats.implicits.showInterpolator
+import dev.langchain4j.agentic.observability.{AgentListener, AgentRequest, AgentResponse}
 import dev.langchain4j.agentic.{Agent, AgenticServices}
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{SystemMessage, UserMessage, V}
@@ -40,6 +42,14 @@ object FlightsSearchAgent:
               AgenticServices
                 .agentBuilder(classOf[FlightsSearchExpert])
                 .chatModel(chatModel)
+                .listener(
+                  new AgentListener():
+                    override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
+                      println(s" >> QUESTION: ${agentRequest.inputs().get("question")}")
+                      println(s" >> AVAILABILITIES: ${agentRequest.inputs().get("availabilities")}")
+                    override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
+                      println(s" >> FLIGHTS: ${agentResponse.output()}"),
+                )
                 .build(),
             )
             .outputKey("flights")
@@ -51,11 +61,19 @@ object FlightsSearchAgent:
                 variablesFrom("question" -> question),
               )
               .asInstanceOf[String],
-          )
-        flights <- IO.fromEither(parse(answer).flatMap(_.as[Flights]))
-      yield flights.flights).retryOnError(
+          ).map(stripCodeFences)
+        flights <- flightsFrom(answer)
+      yield flights).retryOnError(
         handled = classOf[java.net.http.HttpTimeoutException],
       )
+
+  private def flightsFrom(answer: String) =
+    IO.fromEither:
+      parse(answer).flatMap: json =>
+        json
+          .as[Flights]
+          .map(_.flights)
+          .orElse(json.as[List[Flight]])
 
   private trait FlightsSearchExpert:
     @SystemMessage(fromResource = "flights_search/system_message.txt")

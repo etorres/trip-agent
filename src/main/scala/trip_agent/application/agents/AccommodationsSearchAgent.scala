@@ -2,6 +2,7 @@ package es.eriktorr
 package trip_agent.application.agents
 
 import trip_agent.application.AccommodationService
+import trip_agent.application.agents.tools.AnswerProcessor.stripCodeFences
 import trip_agent.application.agents.tools.AvailabilityLoader.addToScope
 import trip_agent.application.agents.tools.DateExtractor
 import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
@@ -51,11 +52,19 @@ object AccommodationsSearchAgent:
                 variablesFrom("question" -> question),
               )
               .asInstanceOf[String],
-          )
-        accommodations <- IO.fromEither(parse(answer).flatMap(_.as[Accommodations]))
-      yield accommodations.accommodations).retryOnError(
+          ).map(stripCodeFences)
+        accommodations <- accommodationsFrom(answer)
+      yield accommodations).retryOnError(
         handled = classOf[java.net.http.HttpTimeoutException],
       )
+
+  private def accommodationsFrom(answer: String) =
+    IO.fromEither:
+      parse(answer).flatMap: json =>
+        json
+          .as[Accommodations]
+          .map(_.accommodations)
+          .orElse(json.as[List[Accommodation]])
 
   private trait AccommodationsSearchExpert:
     @SystemMessage(fromResource = "accommodations_search/system_message.txt")

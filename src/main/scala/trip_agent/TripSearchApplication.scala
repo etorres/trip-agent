@@ -71,7 +71,7 @@ object TripSearchApplication
                   chatModel = chatModel,
                   dateExtractor = DateExtractor.impl(chatModel),
                 ),
-                mailSenderAgent = MailSenderAgent.impl,
+                mailSenderAgent = MailSenderAgent.impl(chatModel),
                 bookingService = BookingService.impl,
               )
             yield tripSearchWorkflow

@@ -13,7 +13,7 @@ services:
     container_name: ollama-pull-model
     depends_on:
       - ollama
-    command: ["http://ollama:11434/api/pull","-d","{\"model\":\"phi3:3.8b\",\"insecure\":true,\"stream\":false}"]
+    command: ["http://ollama:11434/api/pull","-d","{\"model\":\"deepseek-r1:1.5b\",\"insecure\":true,\"stream\":false}"]
   ollama-load-model:
     image: alpine/curl
     hostname: ollama-load-model
@@ -21,7 +21,7 @@ services:
     depends_on:
       ollama-pull-model:
         condition: service_completed_successfully
-    command: ["http://ollama:11434/api/generate","-d","{\"model\":\"phi3:3.8b\",\"keep_alive\":\"30m\",\"stream\":false}"]
+    command: ["http://ollama:11434/api/generate","-d","{\"model\":\"deepseek-r1:1.5b\",\"keep_alive\":\"30m\",\"stream\":false}"]
   wait-for-ollama:
     image: backplane/true
     hostname: wait-for-ollama

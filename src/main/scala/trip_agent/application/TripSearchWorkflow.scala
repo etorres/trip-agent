@@ -160,7 +160,7 @@ final class TripSearchWorkflow(
     WIO
       .runIO[TripSearchState.Found]: input =>
         mailSenderAgent
-          .sendEmail(input.accommodations, input.flights, input.question)
+          .sendEmail(input.accommodations, input.flights, input.question, ???)
           .map: emailAddress =>
             TripSearchEvent.Sent(emailAddress)
       .handleEvent[

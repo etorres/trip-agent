@@ -12,6 +12,6 @@ object AvailabilityLoader:
     AgenticServices.agentAction((agenticScope: AgenticScope) =>
       agenticScope.writeState(
         "availabilities",
-        availabilities.asJson.noSpaces,
+        availabilities.asJson.spaces4,
       ),
     )

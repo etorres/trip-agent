@@ -7,6 +7,7 @@ import cats.implicits.showInterpolator
 import dev.langchain4j.agentic.Agent
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{AiServices, SystemMessage, UserMessage, V}
+import es.eriktorr.trip_agent.application.agents.tools.AnswerProcessor.stripCodeFences
 import io.circe.Decoder
 import io.circe.parser.decode
 import org.typelevel.log4cats.StructuredLogger
@@ -25,7 +26,9 @@ object DateExtractor:
       for
         _ <- logger.info(show"Extracting stay dates from: \"$question\"")
         assistant = AiServices.create(classOf[Assistant], chatModel)
-        answer <- IO.blocking(assistant.findDates(question))
+        answer <- IO
+          .blocking(assistant.findDates(question))
+          .map(stripCodeFences)
         stay = decode[Stay](answer).fold(throw _, identity)
         toLocalDate = (x: String) => LocalDate.parse(x)
       yield Arrow[Function1].split(

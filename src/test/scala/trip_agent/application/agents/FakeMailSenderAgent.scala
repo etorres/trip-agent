@@ -13,16 +13,19 @@ final class FakeMailSenderAgent(
       accommodations: List[Accommodation],
       flights: List[Flight],
       question: String,
+      requestId: String,
   ): IO[String] =
     stateRef
       .update: currentState =>
-        currentState.copy(sentMails = (accommodations, flights, question) :: currentState.sentMails)
+        currentState.copy(
+          sentMails = (accommodations, flights, question, requestId) :: currentState.sentMails,
+        )
       .map: _ =>
         findEmailUnsafe(question)
 
 object FakeMailSenderAgent:
   final case class MailSenderAgentState(
-      sentMails: List[(List[Accommodation], List[Flight], String)],
+      sentMails: List[(List[Accommodation], List[Flight], String, String)],
   )
 
   object MailSenderAgentState:

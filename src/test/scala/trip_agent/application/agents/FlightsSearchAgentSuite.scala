@@ -22,7 +22,7 @@ object FlightsSearchAgentSuite extends SimpleIOSuite:
       given StructuredLogger[IO] <- Slf4jLogger.create[IO]
       chatModelProvider = ChatModelProvider(
         ollamaApiClient = FakeOllamaApiClient(),
-        config = TestOllamaConfig.phi3LocalContainer.config,
+        config = TestOllamaConfig.deepSeekR1LocalContainer.config,
       )
       chatModel <- chatModelProvider.chatModel(verbose = false)
       testee = FlightsSearchAgent.impl(
