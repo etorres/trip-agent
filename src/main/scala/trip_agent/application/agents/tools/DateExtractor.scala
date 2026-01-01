@@ -1,13 +1,14 @@
 package es.eriktorr
 package trip_agent.application.agents.tools
 
+import trip_agent.application.agents.tools.AnswerProcessor.stripCodeFences
+
 import cats.arrow.Arrow
 import cats.effect.IO
 import cats.implicits.showInterpolator
 import dev.langchain4j.agentic.Agent
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{AiServices, SystemMessage, UserMessage, V}
-import es.eriktorr.trip_agent.application.agents.tools.AnswerProcessor.stripCodeFences
 import io.circe.Decoder
 import io.circe.parser.decode
 import org.typelevel.log4cats.StructuredLogger

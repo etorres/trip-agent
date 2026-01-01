@@ -3,18 +3,14 @@ package trip_agent
 
 import trip_agent.TripSearchConfig.OllamaConfig
 import trip_agent.TripSearchConfig.OllamaConfig.OllamaModel
-import trip_agent.application.agents.tools.{ChatModelProvider, DateExtractor}
+import trip_agent.application.*
+import trip_agent.application.agents.tools.{ChatModelProvider, DateExtractor, EmailExtractor}
 import trip_agent.application.agents.{
   AccommodationsSearchAgent,
   FlightsSearchAgent,
-  MailSenderAgent,
+  MailWriterAgent,
 }
-import trip_agent.application.{
-  AccommodationService,
-  BookingService,
-  FlightService,
-  TripSearchWorkflow,
-}
+import trip_agent.domain.RequestId
 import trip_agent.infrastructure.HttpClient.httpClientWith
 import trip_agent.infrastructure.{OllamaApiClient, TSIDGen}
 
@@ -71,7 +67,13 @@ object TripSearchApplication
                   chatModel = chatModel,
                   dateExtractor = DateExtractor.impl(chatModel),
                 ),
-                mailSenderAgent = MailSenderAgent.impl(chatModel),
+                mailWriterAgent = MailWriterAgent.impl(
+                  chatModel = chatModel,
+                  emailExtractor = EmailExtractor.impl(chatModel),
+                ),
+                mailSender = MailSender.impl(
+                  from = "trip.agency@gmail.com",
+                ),
                 bookingService = BookingService.impl,
               )
             yield tripSearchWorkflow
@@ -88,7 +90,10 @@ object TripSearchApplication
           workflowInstance <- runtime.createInstance(tsid.toString)
           _ <- workflowInstance.deliverSignal(
             TripSearchWorkflow.TripSearchSignal.findTrip,
-            TripSearchWorkflow.TripSearchSignal.FindTrip("jane@example.org"),
+            TripSearchWorkflow.TripSearchSignal.FindTrip(
+              RequestId(tsid),
+              "jane@example.org",
+            ),
           )
           _ <- workflowInstance.queryState().flatMap(IO.println)
           _ <- IO.blocking {

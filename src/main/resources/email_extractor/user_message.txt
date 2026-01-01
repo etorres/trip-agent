@@ -1,0 +1,3 @@
+Extract the notification email address from the following text: "{{question}}".
+Ignore any information that does not refer to the notification email address.
+If any error occurs in the tool you are using, do not provide an email address.

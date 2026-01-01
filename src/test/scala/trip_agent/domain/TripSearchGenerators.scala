@@ -6,6 +6,7 @@ import trip_agent.spec.StringGenerators.alphaNumericStringBetween
 import trip_agent.spec.TemporalGenerators.zonedDateTimeGen
 
 import cats.implicits.{catsSyntaxTuple6Semigroupal, toTraverseOps}
+import io.hypersistence.tsid.TSID
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.genInstances
 
@@ -97,3 +98,7 @@ object TripSearchGenerators:
       emailAddress <- emailAddressGen()
       lines <- linesGen(emailAddress)
     yield lines.mkString("\n")
+
+  val requestIdGen: Gen[RequestId] =
+    val tsid = TSID.Factory.getTsid256
+    RequestId(tsid)

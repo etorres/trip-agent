@@ -11,7 +11,6 @@ import trip_agent.infrastructure.data.retry.IOExtensions.retryOnError
 
 import cats.effect.IO
 import cats.implicits.showInterpolator
-import dev.langchain4j.agentic.observability.{AgentListener, AgentRequest, AgentResponse}
 import dev.langchain4j.agentic.{Agent, AgenticServices}
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{SystemMessage, UserMessage, V}
@@ -42,14 +41,6 @@ object FlightsSearchAgent:
               AgenticServices
                 .agentBuilder(classOf[FlightsSearchExpert])
                 .chatModel(chatModel)
-                .listener(
-                  new AgentListener():
-                    override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
-                      println(s" >> QUESTION: ${agentRequest.inputs().get("question")}")
-                      println(s" >> AVAILABILITIES: ${agentRequest.inputs().get("availabilities")}")
-                    override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
-                      println(s" >> FLIGHTS: ${agentResponse.output()}"),
-                )
                 .build(),
             )
             .outputKey("flights")

@@ -10,19 +10,27 @@ import trip_agent.application.TripSearchWorkflow.{
 }
 import trip_agent.application.agents.FakeAccommodationsSearchAgent.AccommodationsSearchAgentState
 import trip_agent.application.agents.FakeFlightsSearchAgent.FlightsSearchAgentState
-import trip_agent.application.agents.FakeMailSenderAgent.MailSenderAgentState
+import trip_agent.application.agents.FakeMailWriterAgent.MailWriterAgentState
 import trip_agent.application.agents.{
   FakeAccommodationsSearchAgent,
   FakeFlightsSearchAgent,
-  FakeMailSenderAgent,
+  FakeMailWriterAgent,
 }
-import trip_agent.domain.TripSearchGenerators.{accommodationsGen, flightsGen, questionGen}
-import trip_agent.domain.{Accommodation, Flight, TripSearch}
+import trip_agent.domain.RequestId.given
+import trip_agent.domain.TripSearchGenerators.{
+  accommodationsGen,
+  flightsGen,
+  questionGen,
+  requestIdGen,
+}
+import trip_agent.domain.{Accommodation, Flight, RequestId, TripSearch}
 import trip_agent.spec.StringGenerators.alphaNumericStringBetween
 
 import cats.derived.*
 import cats.effect.{IO, Ref, Resource}
+import cats.implicits.toShow
 import cats.{Eq, Show}
+import es.eriktorr.trip_agent.application.FakeMailSender.MailSenderState
 import org.scalacheck.Gen
 import weaver.scalacheck.Checkers
 import weaver.{Expectations, IOSuite, Log}
@@ -72,12 +80,12 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       (testCaseGen, testee) =>
         forall(testCaseGen): testCase =>
           testResources(engine, testCase.accommodations, testCase.flights).use:
-            (runtime, mailsStateRef, bookingsStateRef) =>
+            (runtime, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef) =>
               for
-                workflowInstance <- runtime.createInstance(testCase.requestId)
+                workflowInstance <- runtime.createInstance(testCase.requestId.value.show)
                 _ <- workflowInstance.deliverSignal(
                   TripSearchSignal.findTrip,
-                  TripSearchSignal.FindTrip(testCase.question),
+                  TripSearchSignal.FindTrip(testCase.requestId, testCase.question),
                 )
                 _ <- workflowInstance
                   .queryState()
@@ -85,13 +93,15 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
                     log.info(s"State after find trip signal is: $state")
                 _ <- testee(workflowInstance)
                 finalState <- workflowInstance.queryState()
-                finalMailSenderAgentState <- mailsStateRef.get
+                finalMailWriterAgentState <- writtenMailsStateRef.get
+                finalMailSenderState <- sentMailsStateRef.get
                 finalBookingServiceState <- bookingsStateRef.get
               yield (
                 expect.eql(testCase.expectedState, finalState) ||
                   exists(testCase.otherPossibleState)(state => expect.eql(state, finalState))
               ) &&
-                expect.eql(testCase.expectedMails, finalMailSenderAgentState.sentMails) &&
+                expect.eql(testCase.expectedWrittenMails, finalMailWriterAgentState.writtenMails) &&
+                expect.eql(testCase.expectedSentMails, finalMailSenderState.sentMails) &&
                 expect.eql(testCase.expectedBooking, finalBookingServiceState.bookings)
 
   override type Res = WorkflowInstanceEngine
@@ -109,27 +119,32 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       flights: Map[String, List[Flight]],
   ) =
     for
-      (tripSearchWorkflow, mailsStateRef, bookingsStateRef) <- Resource.eval:
-        for
-          accommodationsStateRef <- Ref.of[IO, AccommodationsSearchAgentState](
-            AccommodationsSearchAgentState.empty.copy(accommodations),
-          )
-          flightsStateRef <- Ref.of[IO, FlightsSearchAgentState](
-            FlightsSearchAgentState.empty.copy(flights),
-          )
-          mailsStateRef <- Ref.of[IO, MailSenderAgentState](
-            MailSenderAgentState.empty,
-          )
-          bookingsStateRef <- Ref.of[IO, BookingServiceState](
-            BookingServiceState.empty,
-          )
-          tripSearchWorkflow = TripSearchWorkflow(
-            accommodationsSearchAgent = FakeAccommodationsSearchAgent(accommodationsStateRef),
-            flightsSearchAgent = FakeFlightsSearchAgent(flightsStateRef),
-            mailSenderAgent = FakeMailSenderAgent(mailsStateRef),
-            bookingService = FakeBookingService(bookingsStateRef),
-          )
-        yield (tripSearchWorkflow, mailsStateRef, bookingsStateRef)
+      (tripSearchWorkflow, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef) <-
+        Resource.eval:
+          for
+            accommodationsStateRef <- Ref.of[IO, AccommodationsSearchAgentState](
+              AccommodationsSearchAgentState.empty.copy(accommodations),
+            )
+            flightsStateRef <- Ref.of[IO, FlightsSearchAgentState](
+              FlightsSearchAgentState.empty.copy(flights),
+            )
+            writtenMailsStateRef <- Ref.of[IO, MailWriterAgentState](
+              MailWriterAgentState.empty,
+            )
+            sentMailsStateRef <- Ref.of[IO, MailSenderState](
+              MailSenderState.empty,
+            )
+            bookingsStateRef <- Ref.of[IO, BookingServiceState](
+              BookingServiceState.empty,
+            )
+            tripSearchWorkflow = TripSearchWorkflow(
+              accommodationsSearchAgent = FakeAccommodationsSearchAgent(accommodationsStateRef),
+              flightsSearchAgent = FakeFlightsSearchAgent(flightsStateRef),
+              mailWriterAgent = FakeMailWriterAgent(writtenMailsStateRef),
+              mailSender = FakeMailSender(sentMailsStateRef),
+              bookingService = FakeBookingService(bookingsStateRef),
+            )
+          yield (tripSearchWorkflow, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef)
       runtime <- InMemoryRuntime
         .default[TripSearchContext.Ctx](
           workflow = tripSearchWorkflow.workflow,
@@ -137,27 +152,28 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
           engine = engine,
         )
         .toResource
-    yield (runtime, mailsStateRef, bookingsStateRef)
+    yield (runtime, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef)
 
   final private case class TestCase(
-      requestId: String,
+      requestId: RequestId,
       question: String,
       accommodations: Map[String, List[Accommodation]],
       flights: Map[String, List[Flight]],
       expectedState: TripSearchState,
       otherPossibleState: Option[TripSearchState],
-      expectedMails: List[(List[Accommodation], List[Flight], String, String)],
+      expectedWrittenMails: List[(List[Accommodation], List[Flight], String, RequestId)],
+      expectedSentMails: List[(String, String, String)],
       expectedBooking: List[(String, List[Accommodation], List[Flight])],
   ) derives Eq,
         Show
 
   private lazy val bookTripTestCaseGen =
     for
-      requestId <- Gen.uuid.map(_.toString)
+      requestId <- requestIdGen
       question <- questionGen
       accommodations <- accommodationsGen
       flights <- flightsGen
-      emailAddress = FakeMailSenderAgent.findEmailUnsafe(question)
+      emailAddress = FakeMailWriterAgent.findEmailUnsafe(question)
     yield TestCase(
       requestId = requestId,
       question = question,
@@ -165,13 +181,20 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       flights = Map(question -> flights),
       expectedState = TripSearchState.Booked(),
       otherPossibleState = None,
-      expectedMails = List((accommodations, flights, question, requestId)),
+      expectedWrittenMails = List((accommodations, flights, question, requestId)),
+      expectedSentMails = List(
+        (
+          emailAddress,
+          TripSearchWorkflow.emailSubjectFrom(requestId),
+          FakeMailWriterAgent.emailBody,
+        ),
+      ),
       expectedBooking = List((emailAddress, accommodations, flights)),
     )
 
   private lazy val missingEmailTestCaseGen =
     for
-      requestId <- Gen.uuid.map(_.toString)
+      requestId <- requestIdGen
       question <- alphaNumericStringBetween(3, 12)
         .retryUntil: question =>
           TripSearch.findEmail(question).isEmpty
@@ -185,13 +208,14 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
         reason = TripSearchError.MissingEmail,
       ),
       otherPossibleState = None,
-      expectedMails = List.empty,
+      expectedWrittenMails = List.empty,
+      expectedSentMails = List.empty,
       expectedBooking = List.empty,
     )
 
   private lazy val incompleteTestCaseGen =
     for
-      requestId <- Gen.uuid.map(_.toString)
+      requestId <- requestIdGen
       question <- questionGen
       (accommodations, flights) <- Gen.frequency(
         1 -> accommodationsGen.map(_ -> List.empty),
@@ -204,26 +228,27 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       accommodations = Map(question -> accommodations),
       flights = Map(question -> flights),
       expectedState = TripSearchState.Canceled(
-        state = TripSearchState.Started(question),
+        state = TripSearchState.Started(requestId, question),
         reason = TripSearchError.NotSettled,
       ),
       otherPossibleState = Some(
         TripSearchState.Canceled(
-          state = TripSearchState.Found(question, accommodations, flights),
+          state = TripSearchState.Found(requestId, question, accommodations, flights),
           reason = TripSearchError.NotSettled,
         ),
       ),
-      expectedMails = List.empty,
+      expectedWrittenMails = List.empty,
+      expectedSentMails = List.empty,
       expectedBooking = List.empty,
     )
 
   private lazy val rejectedTestCaseGen =
     for
-      requestId <- Gen.uuid.map(_.toString)
+      requestId <- requestIdGen
       question <- questionGen
       accommodations <- accommodationsGen
       flights <- flightsGen
-      emailAddress = FakeMailSenderAgent.findEmailUnsafe(question)
+      emailAddress = FakeMailWriterAgent.findEmailUnsafe(question)
     yield TestCase(
       requestId = requestId,
       question = question,
@@ -234,6 +259,13 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
         reason = TripSearchError.Rejected,
       ),
       otherPossibleState = None,
-      expectedMails = List((accommodations, flights, question, requestId)),
+      expectedWrittenMails = List((accommodations, flights, question, requestId)),
+      expectedSentMails = List(
+        (
+          emailAddress,
+          TripSearchWorkflow.emailSubjectFrom(requestId),
+          FakeMailWriterAgent.emailBody,
+        ),
+      ),
       expectedBooking = List.empty,
     )

@@ -1,4 +1,4 @@
-Send an HTML email to the address provided in "{{question}}".
+Write an HTML email body addressed to "{{recipientEmail}}"
 Use the request id "{{requestId}}".
 Use the following list of flights in your email:
 {{flights}}

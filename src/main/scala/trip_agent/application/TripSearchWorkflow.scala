@@ -4,14 +4,15 @@ package trip_agent.application
 import trip_agent.application.agents.{
   AccommodationsSearchAgent,
   FlightsSearchAgent,
-  MailSenderAgent,
+  MailWriterAgent,
 }
 import trip_agent.domain.*
+import trip_agent.domain.RequestId.given
 import trip_agent.domain.TripSearch.findEmail
 
 import cats.derived.*
 import cats.effect.IO
-import cats.implicits.catsSyntaxEitherId
+import cats.implicits.{catsSyntaxEitherId, showInterpolator}
 import cats.{Eq, Show}
 import io.circe.{Decoder, Encoder}
 import monocle.syntax.all.*
@@ -22,7 +23,8 @@ import workflows4s.wio.{SignalDef, WorkflowContext}
 final class TripSearchWorkflow(
     accommodationsSearchAgent: AccommodationsSearchAgent,
     flightsSearchAgent: FlightsSearchAgent,
-    mailSenderAgent: MailSenderAgent,
+    mailWriterAgent: MailWriterAgent,
+    mailSender: MailSender,
     bookingService: BookingService,
 ):
   import TripSearchWorkflow.*
@@ -37,12 +39,12 @@ final class TripSearchWorkflow(
       .handleSignal(TripSearchSignal.findTrip)
       .using[Any]
       .purely: (_, request) =>
-        TripSearchEvent.Started(request.question)
+        TripSearchEvent.Started(request.requestId, request.question)
       .handleEventWithError[TripSearchError.MissingEmail.type, TripSearchState.Started]:
         (_, event) =>
           event match
-            case TripSearchEvent.Started(question) if findEmail(question).isDefined =>
-              TripSearchState.Started(question).asRight
+            case TripSearchEvent.Started(requestId, question) if findEmail(question).isDefined =>
+              TripSearchState.Started(requestId, question).asRight
             case _ => TripSearchError.MissingEmail.asLeft
       .voidResponse
       .autoNamed
@@ -111,6 +113,7 @@ final class TripSearchWorkflow(
     if items.nonEmpty then
       TripSearchState
         .Found(
+          input.requestId,
           input.question,
           event.accommodations,
           event.flights,
@@ -128,6 +131,7 @@ final class TripSearchWorkflow(
       .taking[TripSearchState.Started]
       .withInterimState[TripSearchState.Found]: initial =>
         TripSearchState.Found(
+          initial.requestId,
           initial.question,
           List.empty,
           List.empty,
@@ -159,17 +163,28 @@ final class TripSearchWorkflow(
   ] =
     WIO
       .runIO[TripSearchState.Found]: input =>
-        mailSenderAgent
-          .sendEmail(input.accommodations, input.flights, input.question, ???)
-          .map: emailAddress =>
-            TripSearchEvent.Sent(emailAddress)
+        for
+          (recipientEmail, emailBody) <-
+            mailWriterAgent
+              .writeEmail(
+                accommodations = input.accommodations,
+                flights = input.flights,
+                question = input.question,
+                requestId = input.requestId,
+              )
+          _ <- mailSender.sendEmail(
+            to = recipientEmail,
+            subject = emailSubjectFrom(input.requestId),
+            content = emailBody,
+          )
+        yield TripSearchEvent.Sent(recipientEmail)
       .handleEvent[
         TripSearchState.Sent,
       ]: (input, event) =>
         val sent = event.asInstanceOf[TripSearchEvent.Sent]
         TripSearchState
           .Sent(
-            sent.emailAddress,
+            sent.recipientEmail,
             input.accommodations,
             input.flights,
           )
@@ -243,8 +258,9 @@ end TripSearchWorkflow
 object TripSearchWorkflow:
   enum TripSearchState derives Encoder, Eq, Show:
     case Empty
-    case Started(question: String)
+    case Started(requestId: RequestId, question: String)
     case Found(
+        requestId: RequestId,
         question: String,
         accommodations: List[Accommodation],
         flights: List[Flight],
@@ -264,14 +280,14 @@ object TripSearchWorkflow:
   object TripSearchSignal:
     val findTrip: SignalDef[FindTrip, Unit] = SignalDef()
     val bookTrip: SignalDef[BookTrip, Unit] = SignalDef()
-    final case class FindTrip(question: String) derives Schema, Decoder
+    final case class FindTrip(requestId: RequestId, question: String) derives Schema, Decoder
     final case class BookTrip(approved: Boolean) derives Schema, Decoder
   end TripSearchSignal
 
   enum TripSearchEvent:
-    case Started(question: String)
+    case Started(requestId: RequestId, question: String)
     case Found(accommodations: List[Accommodation], flights: List[Flight])
-    case Sent(emailAddress: String)
+    case Sent(recipientEmail: String)
     case Booked(approved: Boolean)
     case Canceled
   end TripSearchEvent
@@ -291,4 +307,7 @@ object TripSearchWorkflow:
       name: String,
       description: Option[String],
   )
+
+  def emailSubjectFrom(requestId: RequestId): String =
+    show"Your trip is waiting for you! Request ID: ${requestId.value}"
 end TripSearchWorkflow
