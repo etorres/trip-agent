@@ -14,6 +14,12 @@ Based on the [trip-agent](https://github.com/akka-samples/trip-agent) Akka examp
 
 * Add items to this list.
 
+## Example
+
+```shell
+curl -X POST http://localhost:8989/trip-searches/01226N0640J7Q
+```
+
 ## Contributing to the project
 
 ### Building and testing this project
@@ -44,6 +50,7 @@ sbt Universal/packageBin
 ### Development
 
 * [Workflows4s - Business-oriented Workflows for Scala](https://business4s.org/workflows4s/).
+* [LangChain4j - Open-source library that simplifies the integration of LLMs into Java applications](https://docs.langchain4j.dev/).
 
 ## Troubleshooting
 
