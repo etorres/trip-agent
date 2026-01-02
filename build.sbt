@@ -93,6 +93,7 @@ lazy val root = (project in file("."))
       "org.apache.pekko" %% "pekko-persistence-query" % "1.2.1",
       "org.apache.pekko" %% "pekko-stream" % "1.2.1",
       "org.apache.pekko" %% "pekko-persistence-jdbc" % "1.2.0",
+      "org.business4s" %% "workflows4s-bpmn" % "0.4.2" % Test,
       "org.business4s" %% "workflows4s-core" % "0.4.2",
       "org.business4s" %% "workflows4s-pekko" % "0.4.2",
       "org.flywaydb" % "flyway-core" % "11.20.0",
