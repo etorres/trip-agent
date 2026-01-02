@@ -14,10 +14,25 @@ Based on the [trip-agent](https://github.com/akka-samples/trip-agent) Akka examp
 
 * Add items to this list.
 
-## Example
+## Workflow definition
 
+![BPMN workflow definition](https://raw.githubusercontent.com/etorres/trip-agent/refs/heads/main/assets/diagram.svg "BPMN workflow definition")
+
+## HTTP API
+
+Create a new trip search:
 ```shell
-curl -X POST http://localhost:8989/trip-searches/01226N0640J7Q
+curl -X POST http://localhost:8989/trip-searches/1
+```
+
+Get trip search state:
+```shell
+curl http://localhost:8989/trip-searches/01226N0640J7Q
+```
+
+Get list of all running trip searches:
+```shell
+curl http://localhost:8989/trip-searches
 ```
 
 ## Contributing to the project
