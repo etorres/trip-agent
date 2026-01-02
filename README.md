@@ -8,7 +8,7 @@ Based on the [trip-agent](https://github.com/akka-samples/trip-agent) Akka examp
 > 
 > Once a search is requested the app will look for the flights, accommodations, and will email the requester with some options and the best value offer.
 > 
-> -- <cite>Akka / Tutorials / Additional Samples</cite>
+> - <cite>Akka / Tutorials / Additional Samples</cite>
 
 ## TO-DO List
 
