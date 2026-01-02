@@ -36,9 +36,9 @@ object TripSearchWorkflowService:
         IO.fromFuture(
           IO(workflow.deliverSignal(TripSearchWorkflow.TripSearchSignal.findTrip, input)),
         ).flatMap {
+          case Right(response) => IO.pure(response)
           case Left(UnexpectedSignal(signal)) =>
             IO.raiseError(RuntimeException(s"Unexpected creation signal $signal for instance $id"))
-          case Right(response) => IO.pure(response)
         }
 
       override def listWorkflows: IO[Seq[String]] =

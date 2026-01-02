@@ -9,12 +9,13 @@ import trip_agent.application.agents.{
 import trip_agent.domain.*
 import trip_agent.domain.RequestId.given
 import trip_agent.domain.TripSearch.findEmail
+import trip_agent.infrastructure.network.PekkoCirceSerializer
 
 import cats.derived.*
 import cats.effect.IO
 import cats.implicits.{catsSyntaxEitherId, showInterpolator}
 import cats.{Eq, Show}
-import io.circe.{Decoder, Encoder}
+import io.circe.{Codec, Decoder, Encoder}
 import monocle.syntax.all.*
 import sttp.tapir.Schema
 import workflows4s.wio
@@ -284,13 +285,17 @@ object TripSearchWorkflow:
     final case class BookTrip(approved: Boolean) derives Schema, Decoder
   end TripSearchSignal
 
-  enum TripSearchEvent:
+  enum TripSearchEvent derives Codec.AsObject:
     case Started(requestId: RequestId, question: String)
     case Found(accommodations: List[Accommodation], flights: List[Flight])
     case Sent(recipientEmail: String)
     case Booked(approved: Boolean)
     case Canceled
   end TripSearchEvent
+
+  object TripSearchEvent:
+    final class PekkoSerializer extends PekkoCirceSerializer[TripSearchEvent]:
+      override def identifier: Int = 28648
 
   enum TripSearchError derives Encoder:
     case MissingEmail
