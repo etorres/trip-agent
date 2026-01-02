@@ -11,17 +11,23 @@ import trip_agent.infrastructure.data.retry.IOExtensions.retryOnError
 
 import cats.effect.IO
 import cats.implicits.showInterpolator
+import dev.langchain4j.agentic.observability.{AgentListener, AgentRequest, AgentResponse}
 import dev.langchain4j.agentic.{Agent, AgenticServices}
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{SystemMessage, UserMessage, V}
 import io.circe.Decoder
 import io.circe.parser.parse
 import org.typelevel.log4cats.StructuredLogger
+import org.slf4j.{Logger, LoggerFactory}
 
 trait AccommodationsSearchAgent:
   def accommodationsFor(question: String): IO[List[Accommodation]]
 
 object AccommodationsSearchAgent:
+  @transient
+  private lazy val unsafeLogger: Logger =
+    LoggerFactory.getLogger(classOf[AccommodationsSearchAgent])
+
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def impl(
       accommodationService: AccommodationService,
@@ -41,6 +47,21 @@ object AccommodationsSearchAgent:
               AgenticServices
                 .agentBuilder(classOf[AccommodationsSearchExpert])
                 .chatModel(chatModel)
+                .listener(
+                  new AgentListener:
+                    override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
+                      val question = agentRequest.inputs().get("question")
+                      val availabilities = agentRequest.inputs().get("availabilities")
+                      unsafeLogger.info(s"""Before searching accommodations:
+                                           |>> Question:
+                                           |$question
+                                           |>> Availabilities:
+                                           |$availabilities""".stripMargin)
+                    override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
+                      val accommodations = agentResponse.output()
+                      unsafeLogger.info(s"""After searching accommodations:
+                                           |$accommodations""".stripMargin),
+                )
                 .build(),
             )
             .outputKey("accommodations")

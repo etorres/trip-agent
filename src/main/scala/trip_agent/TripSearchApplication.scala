@@ -10,8 +10,8 @@ import trip_agent.application.agents.{
   MailWriterAgent,
 }
 import trip_agent.infrastructure.HttpClient.httpClientWith
-import trip_agent.infrastructure.OllamaApiClient
 import trip_agent.infrastructure.db.DatabaseMigrator
+import trip_agent.infrastructure.{OllamaApiClient, TSIDGen}
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{ExitCode, IO, Resource}
@@ -42,6 +42,7 @@ object TripSearchApplication
   ): IO[ExitCode] =
     given actorSystem: ActorSystem[Any] = ActorSystem(Behaviors.empty, "TripSearchCluster")
     given logger: StructuredLogger[IO] = Slf4jLogger.getLogger[IO]
+    given TSIDGen[IO] = TSIDGen[IO]
     (for
       _ <- Resource.eval(DatabaseMigrator(config.dbConfig).migrate)
       httpClient <- httpClientWith()

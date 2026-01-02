@@ -11,17 +11,23 @@ import trip_agent.infrastructure.data.retry.IOExtensions.retryOnError
 
 import cats.effect.IO
 import cats.implicits.showInterpolator
+import dev.langchain4j.agentic.observability.{AgentListener, AgentRequest, AgentResponse}
 import dev.langchain4j.agentic.{Agent, AgenticServices}
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{SystemMessage, UserMessage, V}
 import io.circe.Decoder
 import io.circe.parser.parse
+import org.slf4j.{Logger, LoggerFactory}
 import org.typelevel.log4cats.StructuredLogger
 
 trait FlightsSearchAgent:
   def flightsFor(question: String): IO[List[Flight]]
 
 object FlightsSearchAgent:
+  @transient
+  private lazy val unsafeLogger: Logger =
+    LoggerFactory.getLogger(classOf[FlightsSearchAgent])
+
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def impl(
       flightService: FlightService,
@@ -41,6 +47,21 @@ object FlightsSearchAgent:
               AgenticServices
                 .agentBuilder(classOf[FlightsSearchExpert])
                 .chatModel(chatModel)
+                .listener(
+                  new AgentListener:
+                    override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
+                      val question = agentRequest.inputs().get("question")
+                      val availabilities = agentRequest.inputs().get("availabilities")
+                      unsafeLogger.info(s"""Before searching flights:
+                                           |>> Question:
+                                           |$question
+                                           |>> Availabilities:
+                                           |$availabilities""".stripMargin)
+                    override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
+                      val flights = agentResponse.output()
+                      unsafeLogger.info(s"""After searching flights:
+                                           |$flights""".stripMargin),
+                )
                 .build(),
             )
             .outputKey("flights")

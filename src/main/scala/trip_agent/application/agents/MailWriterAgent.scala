@@ -8,10 +8,12 @@ import trip_agent.domain.{Accommodation, Flight, RequestId}
 
 import cats.effect.IO
 import cats.implicits.{showInterpolator, toShow}
+import dev.langchain4j.agentic.observability.{AgentListener, AgentRequest, AgentResponse}
 import dev.langchain4j.agentic.{Agent, AgenticServices}
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{SystemMessage, UserMessage, V}
 import io.circe.syntax.EncoderOps
+import org.slf4j.{Logger, LoggerFactory}
 import org.typelevel.log4cats.StructuredLogger
 
 trait MailWriterAgent:
@@ -23,6 +25,10 @@ trait MailWriterAgent:
   ): IO[(String, String)]
 
 object MailWriterAgent:
+  @transient
+  private lazy val unsafeLogger: Logger =
+    LoggerFactory.getLogger(classOf[MailWriterAgent])
+
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def impl(
       chatModel: ChatModel,
@@ -44,6 +50,30 @@ object MailWriterAgent:
               AgenticServices
                 .agentBuilder(classOf[MailWriter])
                 .chatModel(chatModel)
+                .listener(
+                  new AgentListener:
+                    override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
+                      val requestId = agentRequest.inputs().get("requestId")
+                      val recipientEmail = agentRequest.inputs().get("recipientEmail")
+                      val accommodations = agentRequest.inputs().get("accommodations")
+                      val flights = agentRequest.inputs().get("flights")
+                      val question = agentRequest.inputs().get("question")
+                      unsafeLogger.info(s"""Before writing email:
+                                           |>> RequestId:
+                                           |$requestId
+                                           |>> RecipientEmail:
+                                           |$recipientEmail
+                                           |>> Accommodations:
+                                           |$accommodations
+                                           |>> flights:
+                                           |$flights
+                                           |>> Question:
+                                           |$question""".stripMargin)
+                    override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
+                      val emailBody = agentResponse.output()
+                      unsafeLogger.info(s"""After writing email:
+                                           |$emailBody""".stripMargin),
+                )
                 .build(),
             )
             .outputKey("emailBody")
