@@ -9,11 +9,11 @@ import workflows4s.bpmn.BpmnRenderer
 import java.io.File
 
 object TripSearchWorkflowDraft extends FunSuite:
-  test("should produce a draft".ignore):
+  test("should produce a draft"):
     val findTrip: WIO.Draft = WIO.draft.signal(error = "Email not found")
 
     val findFlights: WIO.Draft = WIO.draft.step(error = "No flights found")
-    val findHotels: WIO.Draft = WIO.draft.step(error = "Not hotels found")
+    val findHotels: WIO.Draft = WIO.draft.step(error = "No hotels found")
 
     val findTripOptions: WIO.Draft =
       WIO.draft.parallel(
