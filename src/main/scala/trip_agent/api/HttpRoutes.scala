@@ -53,7 +53,7 @@ final class HttpRoutes(
             complete(
               TripSearchResponse
                 .FindTrip(
-                  show"We are processing your Request. We'll send you the response to your email in a minute. Your request id is: ${requestId.value}",
+                  show"We are processing your request. We'll send you the response to your email in a minute. Your request id is: ${requestId.value}",
                 ),
             )
           }
