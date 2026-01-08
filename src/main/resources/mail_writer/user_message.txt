@@ -1,8 +1,6 @@
 Write an HTML email body addressed to "{{recipientEmail}}"
 Use the request id "{{requestId}}".
-Use the following list of flights in your email:
-{{flights}}
-Use the following list of accommodations in your email:
-{{accommodations}}
+Use the following list of trip options in your email:
+{{tripOptions}}
 Include in the email a clear recommendation of the best value combination of outbound flight, return flight, and accommodation.
 This keeps global behavior and formatting rules in the system message, and leaves concrete inputs and per-request instructions in the user message, avoiding repetition.
