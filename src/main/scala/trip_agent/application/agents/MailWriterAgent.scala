@@ -54,7 +54,7 @@ object MailWriterAgent:
               accommodationId = accommodation.id,
             )
           yield tripOption -> TripOptionDetails(
-            bookingLinkFrom(baseUri, tripOption),
+            bookingLinkFrom(baseUri, request.requestId, tripOption),
             accommodation,
             flight,
           )).toMap
@@ -129,16 +129,17 @@ object MailWriterAgent:
 
   private def bookingLinkFrom(
       baseUri: Uri,
+      requestId: RequestId,
       tripOption: TripOption,
   ) =
     baseUri
-      .addPath("trips")
-      .addPath("bookings")
+      .addPath("trip-searches")
+      .addPath(requestId.value.toString)
       .addPath("flight")
       .addPath(tripOption.flightId.toString)
       .addPath("accommodation")
       .addPath(tripOption.accommodationId.toString)
-      .addPath("confirm")
+      .addPath("book")
       .renderString
 
   private case class TripOptionDetails(

@@ -52,21 +52,6 @@ final class TripSearchWorkflow(
       .voidResponse
       .autoNamed
 
-  private val findAccommodations: WIO[
-    TripSearchState.Started,
-    TripSearchError.NotSettled.type,
-    TripSearchState.Found,
-  ] =
-    findTrip(
-      findTripUsing = input =>
-        accommodationsSearchAgent
-          .accommodationsFor(input.request.question)
-          .map: accommodations =>
-            TripSearchEvent.Found(List.empty, accommodations),
-      handleErrorIn = (input, event) => foundTripFrom(input, event, event.accommodations),
-      step = TripSearchStep("Find Accommodations", None),
-    )
-
   private val findFlights: WIO[
     TripSearchState.Started,
     TripSearchError.NotSettled.type,
@@ -80,6 +65,21 @@ final class TripSearchWorkflow(
             TripSearchEvent.Found(flights, List.empty),
       handleErrorIn = (input, event) => foundTripFrom(input, event, event.flights),
       step = TripSearchStep("Find Flights", None),
+    )
+
+  private val findAccommodations: WIO[
+    TripSearchState.Started,
+    TripSearchError.NotSettled.type,
+    TripSearchState.Found,
+  ] =
+    findTrip(
+      findTripUsing = input =>
+        accommodationsSearchAgent
+          .accommodationsFor(input.request.question)
+          .map: accommodations =>
+            TripSearchEvent.Found(List.empty, accommodations),
+      handleErrorIn = (input, event) => foundTripFrom(input, event, event.accommodations),
+      step = TripSearchStep("Find Accommodations", None),
     )
 
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
