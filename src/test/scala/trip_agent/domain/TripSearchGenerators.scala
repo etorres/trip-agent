@@ -14,10 +14,11 @@ import java.time.ZonedDateTime
 import scala.util.Random
 
 object TripSearchGenerators:
-  private val accommodationIdGen = Gen.choose(1, Int.MaxValue)
+  private val accommodationIdGen =
+    Gen.choose(1, Int.MaxValue).map(Accommodation.Id.apply)
 
   def accommodationGen(
-      idGen: Gen[Int] = accommodationIdGen,
+      idGen: Gen[Accommodation.Id] = accommodationIdGen,
       nameGen: Gen[String] = alphaNumericStringBetween(3, 12),
       neighborhoodGen: Gen[String] = alphaNumericStringBetween(3, 12),
       checkinGen: Gen[ZonedDateTime] = zonedDateTimeGen,
@@ -36,15 +37,16 @@ object TripSearchGenerators:
   val accommodationsGen: Gen[List[Accommodation]] =
     for
       size <- Gen.choose(1, 3)
-      ids <- Gen.containerOfN[Set, Int](size, accommodationIdGen)
+      ids <- Gen.containerOfN[Set, Accommodation.Id](size, accommodationIdGen)
       accommodations <- ids.toList.traverse: id =>
         accommodationGen(idGen = id)
     yield accommodations
 
-  private val flightIdGen = Gen.choose(1, Int.MaxValue)
+  private val flightIdGen =
+    Gen.choose(1, Int.MaxValue).map(Flight.Id.apply)
 
   def flightGen(
-      idGen: Gen[Int] = flightIdGen,
+      idGen: Gen[Flight.Id] = flightIdGen,
       fromGen: Gen[String] = alphaNumericStringBetween(3, 12),
       toGen: Gen[String] = alphaNumericStringBetween(3, 12),
       departureGen: Gen[ZonedDateTime] = zonedDateTimeGen,
@@ -63,9 +65,9 @@ object TripSearchGenerators:
   val flightsGen: Gen[List[Flight]] =
     for
       size <- Gen.choose(1, 3)
-      ids <- Gen.containerOfN[Set, Int](size, flightIdGen)
-      flights <- ids.toList.traverse:
-        flightGen(_)
+      ids <- Gen.containerOfN[Set, Flight.Id](size, flightIdGen)
+      flights <- ids.toList.traverse: id =>
+        flightGen(idGen = id)
     yield flights
 
   private val wordGen = alphaNumericStringBetween(3, 12)
@@ -114,6 +116,6 @@ object TripSearchGenerators:
 
   val tripOptionGen: Gen[TripOption] =
     (
-      accommodationIdGen,
       flightIdGen,
+      accommodationIdGen,
     ).mapN(TripOption.apply)

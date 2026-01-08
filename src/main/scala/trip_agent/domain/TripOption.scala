@@ -6,8 +6,8 @@ import cats.{Eq, Show}
 import io.circe.Codec
 
 final case class TripOption(
-    flightId: Int,
-    accommodationId: Int,
+    flightId: Flight.Id,
+    accommodationId: Accommodation.Id,
 ) derives Codec,
       Eq,
       Show

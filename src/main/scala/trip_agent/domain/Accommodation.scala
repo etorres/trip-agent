@@ -9,7 +9,7 @@ import org.typelevel.cats.time.instances.zoneddatetime.given
 import java.time.ZonedDateTime
 
 final case class Accommodation(
-    id: Int,
+    id: Accommodation.Id,
     name: String,
     neighborhood: String,
     checkin: ZonedDateTime,
@@ -18,3 +18,20 @@ final case class Accommodation(
 ) derives Codec,
       Eq,
       Show
+
+object Accommodation:
+  opaque type Id <: Int = Int
+
+  object Id:
+    def apply(value: Int): Id = value
+
+    given Eq[Id] = Eq.fromUniversalEquals
+
+    given Show[Id] = Show.fromToString
+
+    given Codec[Id] =
+      Codec.from(
+        Decoder.decodeInt,
+        Encoder.encodeInt,
+      )
+  end Id

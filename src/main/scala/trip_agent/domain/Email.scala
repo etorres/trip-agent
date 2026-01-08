@@ -25,7 +25,7 @@ object Email:
         Eq,
         Show
 
-  opaque type Address = String
+  opaque type Address <: String = String
 
   object Address:
     def fromString(value: String): Either[Throwable, Address] =
@@ -41,7 +41,7 @@ object Email:
     given Codec[Address] = codecFrom(Address.fromString)
   end Address
 
-  opaque type Subject = String
+  opaque type Subject <: String = String
 
   object Subject:
     def fromString(value: String): Either[Throwable, Subject] =
@@ -57,7 +57,7 @@ object Email:
     given Codec[Subject] = codecFrom(Address.fromString)
   end Subject
 
-  opaque type Body = String
+  opaque type Body <: String = String
 
   object Body:
     def fromString(value: String): Either[Throwable, Body] =

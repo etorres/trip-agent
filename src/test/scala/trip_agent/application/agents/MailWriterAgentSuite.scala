@@ -37,7 +37,7 @@ object MailWriterAgentSuite extends SimpleIOSuite:
         testee.writeEmail(
           accommodations = List(
             Accommodation(
-              id = 123,
+              id = Accommodation.Id(123),
               name = "Name",
               neighborhood = "Neighborhood",
               checkin = ZonedDateTime.now(),
@@ -47,7 +47,7 @@ object MailWriterAgentSuite extends SimpleIOSuite:
           ),
           flights = List(
             Flight(
-              id = 456,
+              id = Flight.Id(456),
               from = "From",
               to = "To",
               departure = ZonedDateTime.now(),
@@ -64,5 +64,5 @@ object MailWriterAgentSuite extends SimpleIOSuite:
     yield expect.eql(Email.MessageId(tsid), obtainedEmail.messageId)
       && expect.eql(Email.Address.applyUnsafe("noop@example.com"), obtainedEmail.recipient)
       && expect.eql(MailWriterAgent.emailSubjectFrom(requestId), obtainedEmail.subject)
-      && expect(obtainedEmail.body.toString.nonEmpty)
+      && expect(obtainedEmail.body.nonEmpty)
       && expect(obtainedOptions.nonEmpty)

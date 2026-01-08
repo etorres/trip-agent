@@ -89,7 +89,7 @@ object AvailabilityService:
         transformer.transform(self)
 
   final case class AccommodationAvailability(
-      id: Int,
+      id: Accommodation.Id,
       name: String,
       neighborhood: String,
       availableFrom: ZonedDateTime,
@@ -113,7 +113,7 @@ object AvailabilityService:
         )
 
   final case class FlightAvailability(
-      id: Int,
+      id: Flight.Id,
       from: String,
       to: String,
       departure: ZonedDateTime,
