@@ -33,6 +33,7 @@ object FlightsSearchAgent:
       flightService: FlightService,
       chatModel: ChatModel,
       dateExtractor: DateExtractor,
+      verbose: Boolean,
   )(using logger: StructuredLogger[IO]): FlightsSearchAgent =
     (question: String) =>
       (for
@@ -50,17 +51,19 @@ object FlightsSearchAgent:
                 .listener(
                   new AgentListener:
                     override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
-                      val question = agentRequest.inputs().get("question")
-                      val availabilities = agentRequest.inputs().get("availabilities")
-                      unsafeLogger.info(s"""Before searching flights:
-                                           |>> Question:
-                                           |$question
-                                           |>> Availabilities:
-                                           |$availabilities""".stripMargin)
+                      if verbose then
+                        val question = agentRequest.inputs().get("question")
+                        val availabilities = agentRequest.inputs().get("availabilities")
+                        unsafeLogger.info(s"""Before searching flights:
+                                             |>> Question:
+                                             |$question
+                                             |>> Availabilities:
+                                             |$availabilities""".stripMargin)
                     override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
-                      val flights = agentResponse.output()
-                      unsafeLogger.info(s"""After searching flights:
-                                           |$flights""".stripMargin),
+                      if verbose then
+                        val flights = agentResponse.output()
+                        unsafeLogger.info(s"""After searching flights:
+                                             |$flights""".stripMargin),
                 )
                 .build(),
             )

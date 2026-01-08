@@ -33,6 +33,7 @@ object AccommodationsSearchAgent:
       accommodationService: AccommodationService,
       chatModel: ChatModel,
       dateExtractor: DateExtractor,
+      verbose: Boolean,
   )(using logger: StructuredLogger[IO]): AccommodationsSearchAgent =
     (question: String) =>
       (for
@@ -50,17 +51,19 @@ object AccommodationsSearchAgent:
                 .listener(
                   new AgentListener:
                     override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
-                      val question = agentRequest.inputs().get("question")
-                      val availabilities = agentRequest.inputs().get("availabilities")
-                      unsafeLogger.info(s"""Before searching accommodations:
-                                           |>> Question:
-                                           |$question
-                                           |>> Availabilities:
-                                           |$availabilities""".stripMargin)
+                      if verbose then
+                        val question = agentRequest.inputs().get("question")
+                        val availabilities = agentRequest.inputs().get("availabilities")
+                        unsafeLogger.info(s"""Before searching accommodations:
+                                             |>> Question:
+                                             |$question
+                                             |>> Availabilities:
+                                             |$availabilities""".stripMargin)
                     override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
-                      val accommodations = agentResponse.output()
-                      unsafeLogger.info(s"""After searching accommodations:
-                                           |$accommodations""".stripMargin),
+                      if verbose then
+                        val accommodations = agentResponse.output()
+                        unsafeLogger.info(s"""After searching accommodations:
+                                             |$accommodations""".stripMargin),
                 )
                 .build(),
             )

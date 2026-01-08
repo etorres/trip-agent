@@ -22,10 +22,14 @@ Based on the [trip-agent](https://github.com/akka-samples/trip-agent) Akka examp
 
 Create a new trip search:
 ```shell
-curl -X POST http://localhost:8989/trip-searches
+curl -X POST http://localhost:8989/trip-searches \
+  -H "Content-Type: application/json" \
+  -d '{"FindTrip":{"question": "Find a trip from Seoul to Tokyo and back, from 2026-05-07 to 2026-05-14. The flight price not higher than 300 total and the total accommodation for the week not higher than 600. Send the suggestion to noop@example.com"}}'
 ```
 
-// Find a trip from Seoul to Tokyo and back, from 2026-05-07 to 2026-05-14. The flight price not higher than 300 total and the total accommodation for the week not higher than 600. Send the suggestion to 'noop@example.com'
+```json
+{"SearchStarted":{"response":"We are processing your request. We'll send you the response to your email in a minute. Your request id is: 0P3ZG6ZNMBHYX"}}
+```
 
 Get trip search state:
 ```shell

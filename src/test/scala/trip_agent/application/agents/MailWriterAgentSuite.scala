@@ -32,6 +32,7 @@ object MailWriterAgentSuite extends SimpleIOSuite:
         baseUri = uri"http://localhost:8080/api",
         chatModel = chatModel,
         emailExtractor = EmailExtractor.impl(chatModel),
+        verbose = false,
       )
       (obtainedEmail, obtainedOptions) <-
         testee.writeEmail(

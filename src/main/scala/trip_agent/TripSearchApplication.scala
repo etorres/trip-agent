@@ -76,16 +76,19 @@ object TripSearchApplication
                 accommodationService = AccommodationService.impl,
                 chatModel = chatModel,
                 dateExtractor = DateExtractor.impl(chatModel),
+                verbose = params.verbose,
               ),
               flightsSearchAgent = FlightsSearchAgent.impl(
                 flightService = FlightService.impl,
                 chatModel = chatModel,
                 dateExtractor = DateExtractor.impl(chatModel),
+                verbose = params.verbose,
               ),
               mailWriterAgent = MailWriterAgent.impl(
                 baseUri = config.baseUri,
                 chatModel = chatModel,
                 emailExtractor = EmailExtractor.impl(chatModel),
+                verbose = params.verbose,
               ),
               mailSender = MailSender.impl(
                 from = config.senderEmail,

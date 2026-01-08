@@ -30,6 +30,7 @@ object AccommodationsSearchAgentSuite extends SimpleIOSuite:
         accommodationService = AccommodationService.impl,
         chatModel = chatModel,
         dateExtractor = DateExtractor.impl(chatModel),
+        verbose = false,
       )
       obtained <- testee.accommodationsFor(
         "Find a trip from Seoul to Tokyo and back, from 2026-05-07 to 2026-05-14. The flight price not higher than 300 total and the total accommodation for the week not higher than 600. Send the suggestion to 'noop@example.com'",

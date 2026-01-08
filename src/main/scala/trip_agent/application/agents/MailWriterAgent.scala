@@ -36,6 +36,7 @@ object MailWriterAgent:
       baseUri: Uri,
       chatModel: ChatModel,
       emailExtractor: EmailExtractor,
+      verbose: Boolean,
   )(using logger: StructuredLogger[IO]): MailWriterAgent =
     (
         flights: List[Flight],
@@ -68,23 +69,25 @@ object MailWriterAgent:
                 .listener(
                   new AgentListener:
                     override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
-                      val recipientEmail = agentRequest.inputs().get("recipientEmail")
-                      val requestId = agentRequest.inputs().get("requestId")
-                      val question = agentRequest.inputs().get("question")
-                      val tripOptions = agentRequest.inputs().get("tripOptions")
-                      unsafeLogger.info(s"""Before writing email:
-                                           |>> RecipientEmail:
-                                           |$recipientEmail
-                                           |>> RequestId:
-                                           |$requestId
-                                           |>> Question:
-                                           |$question
-                                           |>> TripOptions:
-                                           |$tripOptions""".stripMargin)
+                      if verbose then
+                        val recipientEmail = agentRequest.inputs().get("recipientEmail")
+                        val requestId = agentRequest.inputs().get("requestId")
+                        val question = agentRequest.inputs().get("question")
+                        val tripOptions = agentRequest.inputs().get("tripOptions")
+                        unsafeLogger.info(s"""Before writing email:
+                                             |>> RecipientEmail:
+                                             |$recipientEmail
+                                             |>> RequestId:
+                                             |$requestId
+                                             |>> Question:
+                                             |$question
+                                             |>> TripOptions:
+                                             |$tripOptions""".stripMargin)
                     override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
-                      val emailBody = agentResponse.output()
-                      unsafeLogger.info(s"""After writing email:
-                                           |$emailBody""".stripMargin),
+                      if verbose then
+                        val emailBody = agentResponse.output()
+                        unsafeLogger.info(s"""After writing email:
+                                             |$emailBody""".stripMargin),
                 )
                 .build(),
             )
