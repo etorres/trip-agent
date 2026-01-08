@@ -5,9 +5,9 @@ import cats.derived.*
 import cats.{Eq, Show}
 import io.circe.Codec
 
-final case class BookingResponse(
-    accepted: Boolean,
-    bookingId: Option[BookingId],
+final case class TripSelection(
+    bookingId: BookingId,
+    tripOption: TripOption,
 ) derives Codec,
       Eq,
       Show

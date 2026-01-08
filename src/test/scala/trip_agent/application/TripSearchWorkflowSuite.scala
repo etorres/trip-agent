@@ -38,13 +38,13 @@ import workflows4s.runtime.{InMemoryRuntime, InMemoryWorkflowInstance}
 
 object TripSearchWorkflowSuite extends IOSuite with Checkers:
   test("should find a trip"): (engine, log) =>
-    testOperationWith[Either[UnexpectedSignal, BookingResponse]](engine, log)(
+    testOperationWith[Either[UnexpectedSignal, BookingConfirmation]](engine, log)(
       bookTripTestCaseGen,
       (testCase, workflowInstance) =>
         workflowInstance
           .deliverSignal(
             TripSearchSignal.bookTrip,
-            TripSearchSignal.BookTrip(testCase.unsafeConfirmation),
+            TripSearchSignal.BookTrip(testCase.unsafeSelection),
           ),
     )
 
@@ -58,14 +58,14 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       incompleteTestCaseGen,
     )
 
-  test("should reject a trip search when the booking include any error"): (engine, log) =>
-    testOperationWith[Either[UnexpectedSignal, BookingResponse]](engine, log)(
+  test("should decline a booking when include any error"): (engine, log) =>
+    testOperationWith[Either[UnexpectedSignal, BookingConfirmation]](engine, log)(
       rejectedTestCaseGen,
       (testCase, workflowInstance) =>
         workflowInstance
           .deliverSignal(
             TripSearchSignal.bookTrip,
-            TripSearchSignal.BookTrip(testCase.unsafeConfirmation),
+            TripSearchSignal.BookTrip(testCase.unsafeSelection),
           ),
     )
 
@@ -167,17 +167,17 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request: TripRequest,
       accommodations: Map[String, List[Accommodation]],
       flights: Map[String, List[Flight]],
-      maybeConfirmation: Option[BookingConfirmation],
+      maybeSelection: Option[TripSelection],
       expectedState: TripSearchState,
       otherPossibleState: Option[TripSearchState],
-      expectedWrittenMails: List[(List[Accommodation], List[Flight], TripRequest)],
+      expectedWrittenMails: List[(List[Flight], List[Accommodation], TripRequest)],
       expectedSentMails: List[Email],
-      expectedBooking: List[BookingConfirmation],
+      expectedBooking: List[TripSelection],
       expectedResult: A,
   ) derives Eq,
         Show:
     @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    def unsafeConfirmation: BookingConfirmation = maybeConfirmation.get
+    def unsafeSelection: TripSelection = maybeSelection.get
 
   private lazy val bookTripTestCaseGen =
     for
@@ -185,22 +185,26 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       accommodations <- accommodationsGen
       flights <- flightsGen
       emailAddress = FakeMailWriterAgent.findEmailUnsafe(request.question)
-      tripOptions = FakeMailWriterAgent.tripOptionsFrom(accommodations, flights)
-      confirmation <- Gen
+      tripOptions = FakeMailWriterAgent.tripOptionsFrom(flights, accommodations)
+      selection <- Gen
         .oneOf(tripOptions)
         .map: tripOption =>
-          BookingConfirmation(
+          TripSelection(
             BookingId(request.requestId.value),
             tripOption,
           )
+      confirmation = BookingConfirmation(
+        accepted = true,
+        bookingId = Some(BookingId(request.requestId.value)),
+      )
     yield TestCase(
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
-      maybeConfirmation = Some(confirmation),
+      maybeSelection = Some(selection),
       expectedState = TripSearchState.Booked(confirmation),
       otherPossibleState = None,
-      expectedWrittenMails = List((accommodations, flights, request)),
+      expectedWrittenMails = List((flights, accommodations, request)),
       expectedSentMails = List(
         Email(
           messageId = Email.MessageId(request.requestId.value),
@@ -209,11 +213,8 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
           body = FakeMailWriterAgent.emailBody,
         ),
       ),
-      expectedBooking = List(confirmation),
-      expectedResult = BookingResponse(
-        accepted = true,
-        bookingId = Some(BookingId(request.requestId.value)),
-      ).asRight[UnexpectedSignal],
+      expectedBooking = List(selection),
+      expectedResult = confirmation.asRight[UnexpectedSignal],
     )
 
   private lazy val missingEmailTestCaseGen =
@@ -226,7 +227,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
         request = request,
         accommodations = Map.empty,
         flights = Map.empty,
-        maybeConfirmation = None,
+        maybeSelection = None,
         expectedState = TripSearchState.Canceled(
           state = TripSearchState.Empty,
           reason = TripSearchError.MissingEmail,
@@ -250,14 +251,14 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
-      maybeConfirmation = None,
+      maybeSelection = None,
       expectedState = TripSearchState.Canceled(
         state = TripSearchState.Started(request),
         reason = TripSearchError.NotSettled,
       ),
       otherPossibleState = Some(
         TripSearchState.Canceled(
-          state = TripSearchState.Found(request, accommodations, flights),
+          state = TripSearchState.Found(request, flights, accommodations),
           reason = TripSearchError.NotSettled,
         ),
       ),
@@ -273,12 +274,12 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       accommodations <- accommodationsGen
       flights <- flightsGen
       emailAddress = FakeMailWriterAgent.findEmailUnsafe(request.question)
-      tripOptions = FakeMailWriterAgent.tripOptionsFrom(accommodations, flights)
-      confirmation <-
+      tripOptions = FakeMailWriterAgent.tripOptionsFrom(flights, accommodations)
+      selection <-
         tripOptionGen
           .retryUntil(x => !tripOptions.exists(_ === x))
           .map: tripOption =>
-            BookingConfirmation(
+            TripSelection(
               BookingId(request.requestId.value),
               tripOption,
             )
@@ -286,16 +287,12 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
-      maybeConfirmation = Some(confirmation),
-      expectedState = TripSearchState.Canceled(
-        state = TripSearchState.Sent(
-          emailAddress,
-          tripOptions,
-        ),
-        reason = TripSearchError.Rejected,
+      maybeSelection = Some(selection),
+      expectedState = TripSearchState.Booked(
+        BookingConfirmation.notBooked,
       ),
       otherPossibleState = None,
-      expectedWrittenMails = List((accommodations, flights, request)),
+      expectedWrittenMails = List((flights, accommodations, request)),
       expectedSentMails = List(
         Email(
           messageId = Email.MessageId(request.requestId.value),
@@ -305,8 +302,6 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
         ),
       ),
       expectedBooking = List.empty,
-      expectedResult = BookingResponse(
-        accepted = false,
-        bookingId = None,
-      ).asRight[UnexpectedSignal],
+      expectedResult = BookingConfirmation.notBooked
+        .asRight[UnexpectedSignal],
     )

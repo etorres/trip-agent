@@ -1,7 +1,7 @@
 package es.eriktorr
 package trip_agent.application
 
-import trip_agent.domain.{BookingConfirmation, BookingId}
+import trip_agent.domain.{BookingId, TripSelection}
 import trip_agent.domain.TSIDCats.given
 import trip_agent.infrastructure.data.error.HandledError
 
@@ -9,16 +9,16 @@ import cats.effect.{IO, Ref}
 import cats.implicits.{catsSyntaxEq, showInterpolator}
 
 trait BookingService:
-  def book(confirmation: BookingConfirmation): IO[Unit]
+  def book(selection: TripSelection): IO[Unit]
 
 object BookingService:
   def impl(
       stateRef: Ref[IO, BookingServiceState],
   ): BookingService =
-    (confirmation: BookingConfirmation) =>
+    (selection: TripSelection) =>
       stateRef.flatModify: currentState =>
         val (effect, update) =
-          currentState.bookedTrips.find(_ === confirmation.bookingId) match
+          currentState.bookedTrips.find(_ === selection.bookingId) match
             case Some(value) =>
               val effect = IO.raiseError[Unit](
                 BookingServiceError.DuplicatedBookingId(value),
@@ -27,9 +27,9 @@ object BookingService:
               effect -> update
             case None =>
               val effect = IO.println(show"""Booking trip with options:
-                                            |${confirmation.tripOption}
+                                            |${selection.tripOption}
                                             |""".stripMargin)
-              val update = confirmation.bookingId :: currentState.bookedTrips
+              val update = selection.bookingId :: currentState.bookedTrips
               effect -> update
         (currentState.copy(update), effect)
 

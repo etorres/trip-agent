@@ -10,14 +10,14 @@ final class FakeMailWriterAgent(
     stateRef: Ref[IO, MailWriterAgentState],
 ) extends MailWriterAgent:
   override def writeEmail(
-      accommodations: List[Accommodation],
       flights: List[Flight],
+      accommodations: List[Accommodation],
       request: TripRequest,
   ): IO[(Email, List[TripOption])] =
     stateRef
       .update: currentState =>
         currentState.copy(
-          writtenMails = (accommodations, flights, request) :: currentState.writtenMails,
+          writtenMails = (flights, accommodations, request) :: currentState.writtenMails,
         )
       .map: _ =>
         Email(
@@ -25,11 +25,11 @@ final class FakeMailWriterAgent(
           recipient = FakeMailWriterAgent.findEmailUnsafe(request.question),
           subject = MailWriterAgent.emailSubjectFrom(request.requestId),
           body = FakeMailWriterAgent.emailBody,
-        ) -> FakeMailWriterAgent.tripOptionsFrom(accommodations, flights)
+        ) -> FakeMailWriterAgent.tripOptionsFrom(flights, accommodations)
 
 object FakeMailWriterAgent:
   final case class MailWriterAgentState(
-      writtenMails: List[(List[Accommodation], List[Flight], TripRequest)],
+      writtenMails: List[(List[Flight], List[Accommodation], TripRequest)],
   )
 
   object MailWriterAgentState:
@@ -44,12 +44,15 @@ object FakeMailWriterAgent:
       .getOrElse(throw IllegalArgumentException("Missing email address"))
 
   def tripOptionsFrom(
-      accommodations: List[Accommodation],
       flights: List[Flight],
+      accommodations: List[Accommodation],
   ): List[TripOption] =
     for
-      accommodation <- accommodations
       flight <- flights
-    yield TripOption(accommodation.id, flight.id)
+      accommodation <- accommodations
+    yield TripOption(
+      flightId = flight.id,
+      accommodationId = accommodation.id,
+    )
 
   lazy val emailBody: Email.Body = Email.Body.applyUnsafe("Email Body")

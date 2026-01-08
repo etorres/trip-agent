@@ -2,7 +2,7 @@ package es.eriktorr
 package trip_agent.application
 
 import trip_agent.application.FakeBookingService.BookingServiceState
-import trip_agent.domain.BookingConfirmation
+import trip_agent.domain.TripSelection
 
 import cats.effect.{IO, Ref}
 
@@ -10,16 +10,16 @@ final class FakeBookingService(
     stateRef: Ref[IO, BookingServiceState],
 ) extends BookingService:
   override def book(
-      confirmation: BookingConfirmation,
+      selection: TripSelection,
   ): IO[Unit] =
     stateRef.update: currentState =>
       currentState.copy(
-        bookings = confirmation :: currentState.bookings,
+        bookings = selection :: currentState.bookings,
       )
 
 object FakeBookingService:
   final case class BookingServiceState(
-      bookings: List[BookingConfirmation],
+      bookings: List[TripSelection],
   )
 
   object BookingServiceState:

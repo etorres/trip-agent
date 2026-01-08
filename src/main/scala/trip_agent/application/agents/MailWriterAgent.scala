@@ -21,8 +21,8 @@ import org.typelevel.log4cats.StructuredLogger
 
 trait MailWriterAgent:
   def writeEmail(
-      accommodations: List[Accommodation],
       flights: List[Flight],
+      accommodations: List[Accommodation],
       request: TripRequest,
   ): IO[(Email, List[TripOption])]
 
@@ -38,8 +38,8 @@ object MailWriterAgent:
       emailExtractor: EmailExtractor,
   )(using logger: StructuredLogger[IO]): MailWriterAgent =
     (
-        accommodations: List[Accommodation],
         flights: List[Flight],
+        accommodations: List[Accommodation],
         request: TripRequest,
     ) =>
       for
@@ -47,9 +47,12 @@ object MailWriterAgent:
         recipientEmail <- emailExtractor.emailFrom(request.question)
         tripOptions =
           (for
-            accommodation <- accommodations
             flight <- flights
-            tripOption = TripOption(accommodation.id, flight.id)
+            accommodation <- accommodations
+            tripOption = TripOption(
+              flightId = flight.id,
+              accommodationId = accommodation.id,
+            )
           yield tripOption -> TripOptionDetails(
             bookingLinkFrom(baseUri, tripOption),
             accommodation,

@@ -62,7 +62,7 @@ final class TripSearchWorkflow(
         accommodationsSearchAgent
           .accommodationsFor(input.request.question)
           .map: accommodations =>
-            TripSearchEvent.Found(accommodations, List.empty),
+            TripSearchEvent.Found(List.empty, accommodations),
       handleErrorIn = (input, event) => foundTripFrom(input, event, event.accommodations),
       step = TripSearchStep("Find Accommodations", None),
     )
@@ -77,7 +77,7 @@ final class TripSearchWorkflow(
         flightsSearchAgent
           .flightsFor(input.request.question)
           .map: flights =>
-            TripSearchEvent.Found(List.empty, flights),
+            TripSearchEvent.Found(flights, List.empty),
       handleErrorIn = (input, event) => foundTripFrom(input, event, event.flights),
       step = TripSearchStep("Find Flights", None),
     )
@@ -117,8 +117,8 @@ final class TripSearchWorkflow(
       TripSearchState
         .Found(
           input.request,
-          event.accommodations,
           event.flights,
+          event.accommodations,
         )
         .asRight
     else TripSearchError.NotSettled.asLeft
@@ -138,23 +138,23 @@ final class TripSearchWorkflow(
           List.empty,
         )
       .withElement(
-        logic = findAccommodations,
-        incorporatedWith = (interimState, pathState) =>
-          val found = pathState.asInstanceOf[TripSearchState.Found]
-          interimState.focus(_.accommodations).modify(_ ++ found.accommodations),
-      )
-      .withElement(
         logic = findFlights,
         incorporatedWith = (interimState, pathState) =>
           val found = pathState.asInstanceOf[TripSearchState.Found]
           interimState.focus(_.flights).modify(_ ++ found.flights),
       )
+      .withElement(
+        logic = findAccommodations,
+        incorporatedWith = (interimState, pathState) =>
+          val found = pathState.asInstanceOf[TripSearchState.Found]
+          interimState.focus(_.accommodations).modify(_ ++ found.accommodations),
+      )
       .producingOutputWith: (aOut, bOut) =>
         aOut
-          .focus(_.accommodations)
-          .modify(_ ++ bOut.accommodations)
           .focus(_.flights)
           .modify(_ ++ bOut.flights)
+          .focus(_.accommodations)
+          .modify(_ ++ bOut.accommodations)
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   private val sendEmail: WIO[
@@ -168,8 +168,8 @@ final class TripSearchWorkflow(
           (email, tripOptions) <-
             mailWriterAgent
               .writeEmail(
-                accommodations = input.accommodations,
                 flights = input.flights,
+                accommodations = input.accommodations,
                 request = input.request,
               )
           _ <- mailSender.send(email).handleErrorWith {
@@ -192,39 +192,47 @@ final class TripSearchWorkflow(
 
   private val processBooking: WIO[
     TripSearchState.Sent,
-    TripSearchError.Rejected.type,
+    TripSearchError.Declined.type,
     TripSearchState.Booked,
   ] =
     WIO
       .handleSignal(TripSearchSignal.bookTrip)
       .using[TripSearchState.Sent]
       .withSideEffects: (input, event) =>
-        val tripOption = event.confirmation.tripOption
-        IO.pure(input.options.exists(_ === tripOption))
+        val selection = event.selection
+        IO.pure(input.options.exists(_ === selection.tripOption))
           .ifM(
             ifTrue = bookingService
-              .book(event.confirmation)
+              .book(selection)
               .handleErrorWith {
                 case _: BookingServiceError.DuplicatedBookingId => IO.unit
                 case other => IO.raiseError(other)
               }
               .map: _ =>
-                TripSearchEvent.Booked(event.confirmation),
-            ifFalse = IO.pure(TripSearchEvent.Canceled),
+                TripSearchEvent.Booked(
+                  BookingConfirmation(
+                    accepted = true,
+                    bookingId = Some(selection.bookingId),
+                  ),
+                ),
+            ifFalse = IO.pure(
+              TripSearchEvent.Booked(
+                BookingConfirmation.notBooked,
+              ),
+            ),
           )
       .handleEventWithError[
-        TripSearchError.Rejected.type,
+        TripSearchError.Declined.type,
         TripSearchState.Booked,
       ]: (_, event) =>
         event match
           case TripSearchEvent.Booked(confirmation) =>
             TripSearchState.Booked(confirmation).asRight
-          case _ => TripSearchError.Rejected.asLeft
+          case _ => TripSearchError.Declined.asLeft
       .produceResponse: (_, event) =>
         event match
-          case TripSearchEvent.Booked(confirmation) =>
-            BookingResponse(accepted = true, Some(confirmation.bookingId))
-          case _ => BookingResponse(accepted = false, None)
+          case TripSearchEvent.Booked(confirmation) => confirmation
+          case _ => BookingConfirmation.notBooked
       .autoNamed
 
   private val completeSearch: WIO[
@@ -267,8 +275,8 @@ object TripSearchWorkflow:
     case Started(request: TripRequest)
     case Found(
         request: TripRequest,
-        accommodations: List[Accommodation],
         flights: List[Flight],
+        accommodations: List[Accommodation],
     )
     case Sent(
         recipient: Email.Address,
@@ -285,18 +293,16 @@ object TripSearchWorkflow:
 
   object TripSearchSignal:
     val findTrip: SignalDef[FindTrip, Unit] = SignalDef()
-    val bookTrip: SignalDef[BookTrip, BookingResponse] = SignalDef()
+    val bookTrip: SignalDef[BookTrip, BookingConfirmation] = SignalDef()
     final case class FindTrip(request: TripRequest) derives Decoder
-    final case class BookTrip(
-        confirmation: BookingConfirmation,
-    ) derives Decoder
+    final case class BookTrip(selection: TripSelection) derives Decoder
   end TripSearchSignal
 
   enum TripSearchEvent derives Codec.AsObject:
     case Started(request: TripRequest)
     case Found(
-        accommodations: List[Accommodation],
         flights: List[Flight],
+        accommodations: List[Accommodation],
     )
     case Sent(
         recipient: Email.Address,
@@ -315,7 +321,7 @@ object TripSearchWorkflow:
   enum TripSearchError derives Encoder:
     case MissingEmail
     case NotSettled
-    case Rejected
+    case Declined
   end TripSearchError
 
   object TripSearchContext extends WorkflowContext:
