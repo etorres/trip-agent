@@ -14,7 +14,7 @@ object OllamaApiClientSuite extends SimpleIOSuite:
   loggedTest("should call the api with a model already available"): log =>
     testWith(
       log = log,
-      testConfig = TestOllamaConfig.phi3LocalContainer,
+      testConfig = TestOllamaConfig.deepSeekR1LocalContainer,
       timeout = 30.seconds,
     )
 
@@ -22,7 +22,7 @@ object OllamaApiClientSuite extends SimpleIOSuite:
     log =>
       testWith(
         log = log,
-        testConfig = TestOllamaConfig.mistralLocalContainer,
+        testConfig = TestOllamaConfig.phi3LocalContainer,
       )
 
   private def testWith(

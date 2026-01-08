@@ -14,7 +14,7 @@ import trip_agent.infrastructure.db.DatabaseMigrator
 import trip_agent.infrastructure.{OllamaApiClient, TSIDGen}
 
 import cats.effect.unsafe.implicits.global
-import cats.effect.{ExitCode, IO, Resource}
+import cats.effect.{ExitCode, IO, Ref, Resource}
 import cats.implicits.{catsSyntaxTuple2Semigroupal, toFlatMapOps}
 import com.monovore.decline.Opts
 import com.monovore.decline.effect.CommandIOApp
@@ -65,6 +65,12 @@ object TripSearchApplication
             chatModel <- chatModelProvider.chatModel(
               verbose = params.verbose,
             )
+            mailSenderStateRef <- Ref.of[IO, MailSender.MailSenderState](
+              MailSender.MailSenderState.empty,
+            )
+            bookingServiceStateRef <- Ref.of[IO, BookingService.BookingServiceState](
+              BookingService.BookingServiceState.empty,
+            )
             tripSearchWorkflow = TripSearchWorkflow(
               accommodationsSearchAgent = AccommodationsSearchAgent.impl(
                 accommodationService = AccommodationService.impl,
@@ -77,13 +83,17 @@ object TripSearchApplication
                 dateExtractor = DateExtractor.impl(chatModel),
               ),
               mailWriterAgent = MailWriterAgent.impl(
+                baseUri = config.baseUri,
                 chatModel = chatModel,
                 emailExtractor = EmailExtractor.impl(chatModel),
               ),
               mailSender = MailSender.impl(
-                from = "trip.agency@gmail.com",
+                from = config.senderEmail,
+                stateRef = mailSenderStateRef,
               ),
-              bookingService = BookingService.impl,
+              bookingService = BookingService.impl(
+                stateRef = bookingServiceStateRef,
+              ),
             )
           yield tripSearchWorkflow
         runtime =

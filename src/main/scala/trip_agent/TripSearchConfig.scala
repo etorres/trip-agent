@@ -1,12 +1,14 @@
 package es.eriktorr
 package trip_agent
 
+import trip_agent.domain.Email
 import trip_agent.infrastructure.network.IpArgument.given
 import trip_agent.infrastructure.security.Secret
 
 import cats.Show
 import cats.derived.*
 import cats.implicits.{
+  catsSyntaxEither,
   catsSyntaxEq,
   catsSyntaxOption,
   catsSyntaxTuple2Semigroupal,
@@ -15,8 +17,11 @@ import cats.implicits.{
 }
 import com.comcast.ip4s.{host, port, Host, Port}
 import com.monovore.decline.Opts
+import org.http4s.Uri
 
 final case class TripSearchConfig(
+    baseUri: Uri,
+    senderEmail: Email.Address,
     dbConfig: TripSearchConfig.DbConfig,
     ollamaConfig: TripSearchConfig.OllamaConfig,
 )
@@ -29,6 +34,27 @@ object TripSearchConfig:
           name = "TSID_NODE",
           help = "Set the TSID node ID.",
         )
+
+    val baseUriOpts =
+      Opts
+        .env[String](
+          name = "TRIP_AGENT_BASE_URI",
+          help = "Set the base URI.",
+        )
+        .mapValidated: value =>
+          Uri.fromString(value).leftMap(_.message).toValidatedNel
+
+    val senderEmailOpts =
+      Opts
+        .env[String](
+          name = "TRIP_AGENT_SENDER_EMAIL",
+          help = "Set the sender email address.",
+        )
+        .mapValidated: value =>
+          Email.Address
+            .fromString(value)
+            .leftMap(_.getMessage)
+            .toValidatedNel
 
     val dbConfigOpts =
       (
@@ -62,6 +88,13 @@ object TripSearchConfig:
 
     val ollamaOpts =
       (
+        Opts
+          .env[String](
+            name = "TRIP_AGENT_OLLAMA_API_KEY",
+            help = "Set Ollama API key.",
+          )
+          .map(Secret.apply[String])
+          .orNone,
         Opts
           .env[Host](
             name = "TRIP_AGENT_OLLAMA_HOST",
@@ -99,6 +132,8 @@ object TripSearchConfig:
     (
       tsidNodeOpts,
       (
+        baseUriOpts,
+        senderEmailOpts,
         dbConfigOpts,
         ollamaOpts,
       ).mapN(TripSearchConfig.apply),
@@ -114,6 +149,7 @@ object TripSearchConfig:
     def jbcUrl = s"jdbc:postgresql://$host:$port/$database"
 
   final case class OllamaConfig(
+      apiKey: Option[Secret[String]],
       host: Host,
       insecure: Boolean,
       model: OllamaConfig.OllamaModel,
@@ -124,7 +160,27 @@ object TripSearchConfig:
       s"$protocol://$host:$port"
 
   object OllamaConfig:
-    enum OllamaModel(val name: String) derives Show:
-      case PHI3 extends OllamaModel("phi3:3.8b")
-      case MISTRAL extends OllamaModel("mistral:7b")
-      case DEEPSEEK_R1 extends OllamaModel("deepseek-r1:1.5b")
+    enum OllamaModel(
+        val name: String,
+        val cloudEnabled: Boolean,
+    ) derives Show:
+      case PHI3
+          extends OllamaModel(
+            name = "phi3:3.8b",
+            cloudEnabled = false,
+          )
+      case DEEPSEEK_R1
+          extends OllamaModel(
+            name = "deepseek-r1:1.5b",
+            cloudEnabled = false,
+          )
+      case DEEPSEEK_V3_1
+          extends OllamaModel(
+            name = "deepseek-v3.1:671b-cloud",
+            cloudEnabled = true,
+          )
+      case DEEPSEEK_V3_2
+          extends OllamaModel(
+            name = "deepseek-v3.2:cloud",
+            cloudEnabled = true,
+          )

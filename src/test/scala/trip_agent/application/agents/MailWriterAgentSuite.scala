@@ -3,11 +3,12 @@ package trip_agent.application.agents
 
 import trip_agent.TestTripSearchConfig.TestOllamaConfig
 import trip_agent.application.agents.tools.{ChatModelProvider, EmailExtractor}
-import trip_agent.domain.{Accommodation, Flight, RequestId}
+import trip_agent.domain.*
 import trip_agent.infrastructure.{FakeOllamaApiClient, TSIDGen}
 
 import cats.effect.IO
 import cats.implicits.catsSyntaxApplicativeByName
+import org.http4s.implicits.uri
 import org.typelevel.log4cats.StructuredLogger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 import weaver.SimpleIOSuite
@@ -26,11 +27,13 @@ object MailWriterAgentSuite extends SimpleIOSuite:
       )
       chatModel <- chatModelProvider.chatModel(verbose = false)
       tsid <- TSIDGen[IO].randomTSID
+      requestId = RequestId(tsid)
       testee = MailWriterAgent.impl(
+        baseUri = uri"http://localhost:8080/api",
         chatModel = chatModel,
         emailExtractor = EmailExtractor.impl(chatModel),
       )
-      (obtainedAddress, obtainedContent) <-
+      (obtainedEmail, obtainedOptions) <-
         testee.writeEmail(
           accommodations = List(
             Accommodation(
@@ -52,9 +55,14 @@ object MailWriterAgentSuite extends SimpleIOSuite:
               price = 300,
             ),
           ),
-          question =
-            "Find a trip from Seoul to Tokyo and back, from 2026-05-07 to 2026-05-14. The flight price not higher than 300 total and the total accommodation for the week not higher than 600. Send the suggestion to 'noop@example.com'",
-          requestId = RequestId(tsid),
+          request = TripRequest(
+            question =
+              "Find a trip from Seoul to Tokyo and back, from 2026-05-07 to 2026-05-14. The flight price not higher than 300 total and the total accommodation for the week not higher than 600. Send the suggestion to 'noop@example.com'",
+            requestId = requestId,
+          ),
         )
-    yield expect.eql("noop@example.com", obtainedAddress)
-      && expect(obtainedContent.nonEmpty)
+    yield expect.eql(Email.MessageId(tsid), obtainedEmail.messageId)
+      && expect.eql(Email.Address.applyUnsafe("noop@example.com"), obtainedEmail.recipient)
+      && expect.eql(MailWriterAgent.emailSubjectFrom(requestId), obtainedEmail.subject)
+      && expect(obtainedEmail.body.toString.nonEmpty)
+      && expect(obtainedOptions.nonEmpty)

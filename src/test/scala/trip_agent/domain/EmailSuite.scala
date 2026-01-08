@@ -6,7 +6,7 @@ import trip_agent.domain.TripSearchGenerators.questionGen
 import weaver.SimpleIOSuite
 import weaver.scalacheck.Checkers
 
-object TripSearchSuite extends SimpleIOSuite with Checkers:
+object EmailSuite extends SimpleIOSuite with Checkers:
   test("should find email in a text"):
     forall(questionGen): question =>
-      expect(TripSearch.findEmail(question).isDefined)
+      expect(Email.findEmail(question).isDefined)

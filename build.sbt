@@ -75,7 +75,6 @@ lazy val root = (project in file("."))
       "com.lmax" % "disruptor" % "3.4.4" % Runtime,
       "com.monovore" %% "decline" % "2.5.0",
       "com.monovore" %% "decline-effect" % "2.5.0",
-      "com.softwaremill.sttp.tapir" %% "tapir-core" % "1.13.4",
       "dev.langchain4j" % "langchain4j" % "1.10.0",
       "dev.langchain4j" % "langchain4j-agentic" % "1.10.0-beta18",
       "dev.langchain4j" % "langchain4j-core" % "1.10.0",

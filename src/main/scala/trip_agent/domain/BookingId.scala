@@ -8,7 +8,7 @@ import cats.{Eq, Show}
 import io.circe.Codec
 import io.hypersistence.tsid.TSID
 
-final case class RequestId(
+final case class BookingId(
     value: TSID,
 ) derives Codec,
       Eq,

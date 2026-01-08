@@ -15,6 +15,9 @@
         <AsyncLogger name="debug-logger" level="DEBUG" additivity="false">
             <AppenderRef ref="ConsoleAppender"/>
         </AsyncLogger>
+        <AsyncLogger name="dev.langchain4j" level="INFO" additivity="false">
+            <AppenderRef ref="ConsoleAppender"/>
+        </AsyncLogger>
         <AsyncLogger name="test-logger" level="INFO" additivity="false">
             <AppenderRef ref="FileAppender"/>
         </AsyncLogger>

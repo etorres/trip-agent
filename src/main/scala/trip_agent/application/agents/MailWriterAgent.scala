@@ -3,9 +3,10 @@ package trip_agent.application.agents
 
 import trip_agent.application.agents.tools.EmailExtractor
 import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
-import trip_agent.domain.RequestId.given
-import trip_agent.domain.{Accommodation, Flight, RequestId}
+import trip_agent.domain.*
+import trip_agent.domain.TSIDCats.given
 
+import cats.Show
 import cats.effect.IO
 import cats.implicits.{showInterpolator, toShow}
 import dev.langchain4j.agentic.observability.{AgentListener, AgentRequest, AgentResponse}
@@ -13,6 +14,8 @@ import dev.langchain4j.agentic.{Agent, AgenticServices}
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{SystemMessage, UserMessage, V}
 import io.circe.syntax.EncoderOps
+import io.circe.{Codec, Encoder}
+import org.http4s.Uri
 import org.slf4j.{Logger, LoggerFactory}
 import org.typelevel.log4cats.StructuredLogger
 
@@ -20,9 +23,8 @@ trait MailWriterAgent:
   def writeEmail(
       accommodations: List[Accommodation],
       flights: List[Flight],
-      question: String,
-      requestId: RequestId,
-  ): IO[(String, String)]
+      request: TripRequest,
+  ): IO[(Email, List[TripOption])]
 
 object MailWriterAgent:
   @transient
@@ -31,18 +33,28 @@ object MailWriterAgent:
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def impl(
+      baseUri: Uri,
       chatModel: ChatModel,
       emailExtractor: EmailExtractor,
   )(using logger: StructuredLogger[IO]): MailWriterAgent =
     (
         accommodations: List[Accommodation],
         flights: List[Flight],
-        question: String,
-        requestId: RequestId,
+        request: TripRequest,
     ) =>
       for
-        _ <- logger.info(show"Writing email for: \"$question\"")
-        recipientEmail <- emailExtractor.emailFrom(question)
+        _ <- logger.info(show"Writing email for: \"${request.question}\"")
+        recipientEmail <- emailExtractor.emailFrom(request.question)
+        tripOptions =
+          (for
+            accommodation <- accommodations
+            flight <- flights
+            tripOption = TripOption(accommodation.id, flight.id)
+          yield tripOption -> TripOptionDetails(
+            bookingLinkFrom(baseUri, tripOption),
+            accommodation,
+            flight,
+          )).toMap
         mailSenderAgent =
           AgenticServices
             .sequenceBuilder()
@@ -53,22 +65,19 @@ object MailWriterAgent:
                 .listener(
                   new AgentListener:
                     override def beforeAgentInvocation(agentRequest: AgentRequest): Unit =
-                      val requestId = agentRequest.inputs().get("requestId")
                       val recipientEmail = agentRequest.inputs().get("recipientEmail")
-                      val accommodations = agentRequest.inputs().get("accommodations")
-                      val flights = agentRequest.inputs().get("flights")
+                      val requestId = agentRequest.inputs().get("requestId")
                       val question = agentRequest.inputs().get("question")
+                      val tripOptions = agentRequest.inputs().get("tripOptions")
                       unsafeLogger.info(s"""Before writing email:
-                                           |>> RequestId:
-                                           |$requestId
                                            |>> RecipientEmail:
                                            |$recipientEmail
-                                           |>> Accommodations:
-                                           |$accommodations
-                                           |>> flights:
-                                           |$flights
+                                           |>> RequestId:
+                                           |$requestId
                                            |>> Question:
-                                           |$question""".stripMargin)
+                                           |$question
+                                           |>> TripOptions:
+                                           |$tripOptions""".stripMargin)
                     override def afterAgentInvocation(agentResponse: AgentResponse): Unit =
                       val emailBody = agentResponse.output()
                       unsafeLogger.info(s"""After writing email:
@@ -83,16 +92,22 @@ object MailWriterAgent:
             mailSenderAgent
               .invoke(
                 variablesFrom(
-                  "requestId" -> requestId.value.show,
                   "recipientEmail" -> recipientEmail,
-                  "accommodations" -> accommodations.asJson.spaces4,
-                  "flights" -> flights.asJson.spaces4,
-                  "question" -> question,
+                  "requestId" -> request.requestId.value.show,
+                  "question" -> request.question,
+                  "tripOptions" -> tripOptions.values.asJson.spaces4,
                 ),
               )
               .asInstanceOf[String],
           )
-      yield recipientEmail -> emailBody
+        email =
+          Email(
+            messageId = Email.MessageId(request.requestId.value),
+            recipient = Email.Address.applyUnsafe(recipientEmail),
+            subject = emailSubjectFrom(request.requestId),
+            body = Email.Body.applyUnsafe(emailBody),
+          )
+      yield email -> tripOptions.keys.toList
 
   private trait MailWriter:
     @SystemMessage(fromResource = "mail_writer/system_message.txt")
@@ -105,7 +120,31 @@ object MailWriterAgent:
     def writeRecommendation(
         @V("requestId") requestId: String,
         @V("recipientEmail") recipientEmail: String,
-        @V("flights") flights: String,
-        @V("accommodations") accommodations: String,
+        @V("tripOptions") tripOptions: String,
         @V("question") question: String,
     ): String
+
+  private def bookingLinkFrom(
+      baseUri: Uri,
+      tripOption: TripOption,
+  ) =
+    baseUri
+      .addPath("trips")
+      .addPath("bookings")
+      .addPath("flight")
+      .addPath(tripOption.flightId.toString)
+      .addPath("accommodation")
+      .addPath(tripOption.accommodationId.toString)
+      .addPath("confirm")
+      .renderString
+
+  private case class TripOptionDetails(
+      bookingLink: String,
+      accommodation: Accommodation,
+      flight: Flight,
+  ) derives Codec
+
+  def emailSubjectFrom(requestId: RequestId): Email.Subject =
+    Email.Subject.applyUnsafe(
+      show"Your trip is waiting for you! Request ID: ${requestId.value}",
+    )
