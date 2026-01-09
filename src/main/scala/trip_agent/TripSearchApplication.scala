@@ -65,11 +65,11 @@ object TripSearchApplication
             chatModel <- chatModelProvider.chatModel(
               verbose = params.verbose,
             )
-            mailSenderStateRef <- Ref.of[IO, MailSender.MailSenderState](
-              MailSender.MailSenderState.empty,
+            mailSenderStateRef <- Ref.of[IO, MailSender.State](
+              MailSender.State.empty,
             )
-            bookingServiceStateRef <- Ref.of[IO, BookingService.BookingServiceState](
-              BookingService.BookingServiceState.empty,
+            bookingServiceStateRef <- Ref.of[IO, BookingService.State](
+              BookingService.State.empty,
             )
             tripSearchWorkflow = TripSearchWorkflow(
               accommodationsSearchAgent = AccommodationsSearchAgent.impl(

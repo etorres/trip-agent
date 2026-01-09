@@ -7,7 +7,7 @@ import trip_agent.application.agents.tools.AvailabilityLoader.addToScope
 import trip_agent.application.agents.tools.DateExtractor
 import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
 import trip_agent.domain.Accommodation
-import trip_agent.infrastructure.data.retry.IOExtensions.retryOnError
+import trip_agent.infrastructure.data.retry.IOExtensions.retryOnAnyError
 
 import cats.effect.IO
 import cats.implicits.showInterpolator
@@ -17,8 +17,10 @@ import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.service.{SystemMessage, UserMessage, V}
 import io.circe.Decoder
 import io.circe.parser.parse
-import org.typelevel.log4cats.StructuredLogger
 import org.slf4j.{Logger, LoggerFactory}
+import org.typelevel.log4cats.StructuredLogger
+
+import scala.concurrent.duration.DurationInt
 
 trait AccommodationsSearchAgent:
   def accommodationsFor(question: String): IO[List[Accommodation]]
@@ -78,8 +80,9 @@ object AccommodationsSearchAgent:
               .asInstanceOf[String],
           ).map(stripCodeFences)
         accommodations <- accommodationsFrom(answer)
-      yield accommodations).retryOnError(
-        handled = classOf[java.net.http.HttpTimeoutException],
+      yield accommodations).retryOnAnyError(
+        maxRetries = 3,
+        threshold = 2.minutes,
       )
 
   private def accommodationsFrom(answer: String) =

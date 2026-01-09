@@ -22,12 +22,15 @@ import trip_agent.domain.TripSearchGenerators.{
   tripRequestGen,
 }
 import trip_agent.spec.StringGenerators.alphaNumericStringBetween
+import trip_agent.spec.refined.Types.FailureRate
 
 import cats.derived.*
 import cats.effect.{IO, Ref, Resource}
 import cats.implicits.{catsStdShowForEither, catsSyntaxEitherId, catsSyntaxEq, toShow}
 import cats.{Eq, Show}
 import org.scalacheck.Gen
+import org.typelevel.log4cats.StructuredLogger
+import org.typelevel.log4cats.noop.NoOpLogger
 import weaver.scalacheck.Checkers
 import weaver.{Expectations, IOSuite, Log}
 import workflows4s.runtime.WorkflowInstance.UnexpectedSignal
@@ -38,7 +41,7 @@ import workflows4s.runtime.{InMemoryRuntime, InMemoryWorkflowInstance}
 
 object TripSearchWorkflowSuite extends IOSuite with Checkers:
   test("should find a trip"): (engine, log) =>
-    testOperationWith[Either[UnexpectedSignal, BookingConfirmation]](engine, log)(
+    runStepTest[Either[UnexpectedSignal, BookingConfirmation]](engine, log)(
       bookTripTestCaseGen,
       (testCase, workflowInstance) =>
         workflowInstance
@@ -49,18 +52,26 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
     )
 
   test("should fail with an error when starting a search without email"): (engine, log) =>
-    testStateWith(engine, log)(
+    runStateTestWith(engine, log)(
       missingEmailTestCaseGen,
     )
 
   test("should fail with an error when the search is incomplete"): (engine, log) =>
-    testStateWith(engine, log)(
+    runStateTestWith(engine, log)(
       incompleteTestCaseGen,
     )
 
+  test("should fail with an error when the email cannot be sent"): (engine, log) =>
+    runStateTest(engine, log)(
+      alwaysSucceed.copy(
+        mailSender = FailureRate.alwaysFailed,
+      ),
+      notSentEmailTestCaseGen,
+    )
+
   test("should decline a booking when include any error"): (engine, log) =>
-    testOperationWith[Either[UnexpectedSignal, BookingConfirmation]](engine, log)(
-      rejectedTestCaseGen,
+    runStepTest[Either[UnexpectedSignal, BookingConfirmation]](engine, log)(
+      declinedBookingTestCaseGen,
       (testCase, workflowInstance) =>
         workflowInstance
           .deliverSignal(
@@ -71,19 +82,34 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
 
   private given Show[UnexpectedSignal] = Show.fromToString
 
-  private val testStateWith
+  private val runStateTestWith
       : (WorkflowInstanceEngine, Log[IO]) => Gen[TestCase[Unit]] => IO[Expectations] =
-    (engine, log) =>
-      testCaseGen => testOperationWith[Unit](engine, log)(testCaseGen, (_, _) => IO.unit)
+    (engine, log) => testCaseGen => runStepTest[Unit](engine, log)(testCaseGen, (_, _) => IO.unit)
 
-  private def testOperationWith[A: Show]: (WorkflowInstanceEngine, Log[IO]) => (
+  private val runStateTest
+      : (WorkflowInstanceEngine, Log[IO]) => (FailureSettings, Gen[TestCase[Unit]]) => IO[
+        Expectations,
+      ] =
+    (engine, log) =>
+      (failureSettings, testCaseGen) =>
+        runStepTestWith[Unit](engine, log)(failureSettings, testCaseGen, (_, _) => IO.unit)
+
+  private def runStepTest[A: Show]: (WorkflowInstanceEngine, Log[IO]) => (
       Gen[TestCase[A]],
       (TestCase[A], InMemoryWorkflowInstance[TripSearchContext.Ctx]) => IO[A],
   ) => IO[Expectations] =
     (engine, log) =>
-      (testCaseGen, testee) =>
+      (testCaseGen, testee) => runStepTestWith[A](engine, log)(alwaysSucceed, testCaseGen, testee)
+
+  private def runStepTestWith[A: Show]: (WorkflowInstanceEngine, Log[IO]) => (
+      FailureSettings,
+      Gen[TestCase[A]],
+      (TestCase[A], InMemoryWorkflowInstance[TripSearchContext.Ctx]) => IO[A],
+  ) => IO[Expectations] =
+    (engine, log) =>
+      (failureSettings, testCaseGen, testee) =>
         forall(testCaseGen): testCase =>
-          testResources(engine, testCase.accommodations, testCase.flights).use:
+          testResources(engine, testCase.accommodations, testCase.flights, failureSettings).use:
             (runtime, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef) =>
               for
                 workflowInstance <- runtime.createInstance(
@@ -122,10 +148,26 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       engine = WorkflowInstanceEngine.default(knockerUpper, registry)
     yield engine
 
+  final private case class FailureSettings(
+      accommodationsSearchAgent: FailureRate,
+      bookingService: FailureRate,
+      flightsSearchAgent: FailureRate,
+      mailSender: FailureRate,
+  )
+
+  private lazy val alwaysSucceed =
+    FailureSettings(
+      accommodationsSearchAgent = FailureRate.alwaysSucceed,
+      bookingService = FailureRate.alwaysSucceed,
+      flightsSearchAgent = FailureRate.alwaysSucceed,
+      mailSender = FailureRate.alwaysSucceed,
+    )
+
   private def testResources(
       engine: WorkflowInstanceEngine,
       accommodations: Map[String, List[Accommodation]],
       flights: Map[String, List[Flight]],
+      failureSettings: FailureSettings,
   ) =
     for
       (tripSearchWorkflow, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef) <-
@@ -146,12 +188,25 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
             bookingsStateRef <- Ref.of[IO, BookingServiceState](
               BookingServiceState.empty,
             )
+            given StructuredLogger[IO] = NoOpLogger[IO]
             tripSearchWorkflow = TripSearchWorkflow(
-              accommodationsSearchAgent = FakeAccommodationsSearchAgent(accommodationsStateRef),
-              flightsSearchAgent = FakeFlightsSearchAgent(flightsStateRef),
+              accommodationsSearchAgent = FakeAccommodationsSearchAgent(
+                accommodationsStateRef,
+                failureSettings.accommodationsSearchAgent,
+              ),
+              flightsSearchAgent = FakeFlightsSearchAgent(
+                flightsStateRef,
+                failureSettings.flightsSearchAgent,
+              ),
               mailWriterAgent = FakeMailWriterAgent(writtenMailsStateRef),
-              mailSender = FakeMailSender(sentMailsStateRef),
-              bookingService = FakeBookingService(bookingsStateRef),
+              mailSender = FakeMailSender(
+                sentMailsStateRef,
+                failureSettings.mailSender,
+              ),
+              bookingService = FakeBookingService(
+                bookingsStateRef,
+                failureSettings.bookingService,
+              ),
             )
           yield (tripSearchWorkflow, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef)
       runtime <- InMemoryRuntime
@@ -268,7 +323,28 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       expectedResult = (),
     )
 
-  private lazy val rejectedTestCaseGen =
+  private lazy val notSentEmailTestCaseGen =
+    for
+      request <- tripRequestGen()
+      accommodations <- accommodationsGen
+      flights <- flightsGen
+    yield TestCase(
+      request = request,
+      accommodations = Map(request.question -> accommodations),
+      flights = Map(request.question -> flights),
+      maybeSelection = None,
+      expectedState = TripSearchState.Canceled(
+        state = TripSearchState.Found(request, flights, accommodations),
+        reason = TripSearchError.NotSettled,
+      ),
+      otherPossibleState = None,
+      expectedWrittenMails = List((flights, accommodations, request)),
+      expectedSentMails = List.empty,
+      expectedBooking = List.empty,
+      expectedResult = (),
+    )
+
+  private lazy val declinedBookingTestCaseGen =
     for
       request <- tripRequestGen()
       accommodations <- accommodationsGen

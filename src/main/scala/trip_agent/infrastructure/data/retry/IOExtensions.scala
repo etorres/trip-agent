@@ -17,8 +17,8 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 object IOExtensions:
   extension [A](self: IO[A])
     def retryOnAnyError(
-        maxRetries: Int = 3,
-        threshold: FiniteDuration = 2.minutes,
+        maxRetries: Int,
+        threshold: FiniteDuration,
     )(using logger: StructuredLogger[IO]): IO[A] =
       retryWith(
         self,
@@ -29,8 +29,8 @@ object IOExtensions:
 
     @SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
     def retryOnError(
-        maxRetries: Int = 3,
-        threshold: FiniteDuration = 2.minutes,
+        maxRetries: Int,
+        threshold: FiniteDuration,
         handled: Class[? <: Throwable],
     )(using logger: StructuredLogger[IO]): IO[A] =
       retryWith(

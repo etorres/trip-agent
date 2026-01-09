@@ -20,27 +20,31 @@ addCommandAlias(
 lazy val warts = Warts.unsafe.filter(x => !Set(Wart.Any, Wart.DefaultArguments).contains(x))
 
 lazy val withBaseSettings: Project => Project =
-  _.settings(
-    Compile / doc / sources := Seq(),
-    tpolecatDevModeOptions ++= Set(
-      org.typelevel.scalacoptions.ScalacOptions
-        .other("-java-output-version", List("21"), _ => true),
-      org.typelevel.scalacoptions.ScalacOptions.warnOption("safe-init"),
-      org.typelevel.scalacoptions.ScalacOptions.privateOption("explicit-nulls"),
-    ),
-    Compile / compile / wartremoverErrors ++= warts,
-    Test / compile / wartremoverErrors ++= warts,
-    libraryDependencies ++= Seq(
-      "com.47deg" %% "scalacheck-toolbox-datetime" % "0.7.0" % Test,
-      "org.typelevel" %% "weaver-cats" % "0.11.3" % Test,
-      "org.typelevel" %% "weaver-scalacheck" % "0.11.3" % Test,
-    ),
-    Test / envVars := Map(
-      "SBT_TEST_ENV_VARS" -> "true",
-      "TSID_NODE" -> "1",
-    ),
-    Test / logBuffered := false,
-  )
+  _.enablePlugins(JavaAppPackaging)
+    .settings(
+      Compile / doc / sources := Seq(),
+      publish := {},
+      publishLocal := {},
+      tpolecatDevModeOptions ++= Set(
+        org.typelevel.scalacoptions.ScalacOptions
+          .other("-java-output-version", List("21"), _ => true),
+        org.typelevel.scalacoptions.ScalacOptions.warnOption("safe-init"),
+        org.typelevel.scalacoptions.ScalacOptions.privateOption("explicit-nulls"),
+      ),
+      Compile / compile / wartremoverErrors ++= warts,
+      Test / compile / wartremoverErrors ++= warts,
+      libraryDependencies ++= Seq(
+        "com.47deg" %% "scalacheck-toolbox-datetime" % "0.7.0" % Test,
+        "org.typelevel" %% "weaver-cats" % "0.11.3" % Test,
+        "org.typelevel" %% "weaver-scalacheck" % "0.11.3" % Test,
+      ),
+      Test / envVars := Map(
+        "SBT_TEST_ENV_VARS" -> "true",
+        "TSID_NODE" -> "1",
+      ),
+      Test / logBuffered := false,
+      Universal / maintainer := "https://github.com/etorres/trip-agent",
+    )
 
 lazy val withCatsEffect: Project => Project =
   withBaseSettings.compose(
@@ -53,6 +57,7 @@ lazy val withCatsEffect: Project => Project =
         "org.typelevel" %% "cats-effect-kernel" % "3.6.3",
         "org.typelevel" %% "cats-effect-std" % "3.6.3",
         "org.typelevel" %% "cats-kernel" % "2.13.0",
+        "org.typelevel" %% "cats-mtl" % "1.6.0",
         "org.typelevel" %% "cats-time" % "0.6.0",
         "org.typelevel" %% "kittens" % "3.5.0",
       ),
@@ -69,7 +74,7 @@ lazy val root = (project in file("."))
       "com.comcast" %% "ip4s-core" % "3.7.0",
       "com.github.cb372" %% "cats-retry" % "4.0.0",
       "com.github.pjfanning" %% "pekko-http-circe" % "3.7.0",
-      "com.ibm.icu" % "icu4j" % "78.1",
+      "com.ibm.icu" % "icu4j" % "78.2",
       "com.lihaoyi" %% "os-lib" % "0.11.6" % Test,
       "com.lihaoyi" %% "sourcecode" % "0.4.4",
       "com.lmax" % "disruptor" % "3.4.4" % Runtime,
@@ -107,8 +112,8 @@ lazy val root = (project in file("."))
       "org.business4s" %% "workflows4s-bpmn" % "0.4.2" % Test,
       "org.business4s" %% "workflows4s-core" % "0.4.2",
       "org.business4s" %% "workflows4s-pekko" % "0.4.2",
-      "org.flywaydb" % "flyway-core" % "11.20.0",
-      "org.flywaydb" % "flyway-database-postgresql" % "11.20.0",
+      "org.flywaydb" % "flyway-core" % "11.20.1",
+      "org.flywaydb" % "flyway-database-postgresql" % "11.20.1",
       "org.gnieh" %% "fs2-data-json" % "1.12.0",
       "org.gnieh" %% "fs2-data-json-circe" % "1.12.0",
       "org.gnieh" %% "fs2-data-text" % "1.12.0",

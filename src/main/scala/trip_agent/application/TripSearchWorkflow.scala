@@ -1,8 +1,6 @@
 package es.eriktorr
 package trip_agent.application
 
-import trip_agent.application.BookingService.BookingServiceError
-import trip_agent.application.MailSender.MailSenderError
 import trip_agent.application.agents.{
   AccommodationsSearchAgent,
   FlightsSearchAgent,
@@ -10,14 +8,17 @@ import trip_agent.application.agents.{
 }
 import trip_agent.domain.*
 import trip_agent.domain.Email.findEmail
+import trip_agent.infrastructure.StringUtils.abbr
 import trip_agent.infrastructure.network.PekkoCirceSerializer
 
 import cats.derived.*
 import cats.effect.IO
-import cats.implicits.{catsSyntaxEitherId, catsSyntaxEq}
+import cats.implicits.{catsSyntaxEitherId, catsSyntaxEq, showInterpolator}
+import cats.mtl.Handle
 import cats.{Eq, Show}
 import io.circe.{Codec, Decoder, Encoder}
 import monocle.syntax.all.*
+import org.typelevel.log4cats.StructuredLogger
 import workflows4s.wio
 import workflows4s.wio.{SignalDef, WorkflowContext}
 
@@ -27,7 +28,7 @@ final class TripSearchWorkflow(
     mailWriterAgent: MailWriterAgent,
     mailSender: MailSender,
     bookingService: BookingService,
-):
+)(using logger: StructuredLogger[IO]):
   import TripSearchWorkflow.*
   import TripSearchWorkflow.TripSearchContext.*
 
@@ -61,6 +62,10 @@ final class TripSearchWorkflow(
       findTripUsing = input =>
         flightsSearchAgent
           .flightsFor(input.request.question)
+          .handleErrorWith: error =>
+            val message =
+              s"Failed to get flights from agent for question: ${input.request.question.abbr}"
+            logger.error(error)(message).as(List.empty)
           .map: flights =>
             TripSearchEvent.Found(flights, List.empty),
       handleErrorIn = (input, event) => foundTripFrom(input, event, event.flights),
@@ -76,6 +81,10 @@ final class TripSearchWorkflow(
       findTripUsing = input =>
         accommodationsSearchAgent
           .accommodationsFor(input.request.question)
+          .handleErrorWith: error =>
+            val message =
+              s"Failed to get accommodations from agent for question: ${input.request.question.abbr}"
+            logger.error(error)(message).as(List.empty)
           .map: accommodations =>
             TripSearchEvent.Found(List.empty, accommodations),
       handleErrorIn = (input, event) => foundTripFrom(input, event, event.accommodations),
@@ -156,38 +165,51 @@ final class TripSearchWorkflow(
           .focus(_.accommodations)
           .modify(_ ++ bOut.accommodations)
 
-  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   private val sendEmail: WIO[
     TripSearchState.Found,
-    Nothing,
+    TripSearchError.NotSettled.type,
     TripSearchState.Sent,
   ] =
     WIO
       .runIO[TripSearchState.Found]: input =>
-        for
-          (email, tripOptions) <-
-            mailWriterAgent
-              .writeEmail(
-                flights = input.flights,
-                accommodations = input.accommodations,
-                request = input.request,
-              )
-          _ <- mailSender.send(email).handleErrorWith {
-            case _: MailSenderError.DuplicatedMessageId => IO.unit
-            case other => IO.raiseError(other)
-          }
-        yield TripSearchEvent.Sent(
-          email.recipient,
-          tripOptions,
-        )
-      .handleEvent[
+        mailWriterAgent
+          .writeEmail(
+            flights = input.flights,
+            accommodations = input.accommodations,
+            request = input.request,
+          )
+          .flatMap: (email, tripOptions) =>
+            Handle
+              .allow[MailSender.Error]:
+                mailSender.send(email)
+              .rescue:
+                case MailSender.Error.DuplicatedMessageId(messageId) =>
+                  logger.warn(show"Ignoring duplicated email message, messageId: $messageId")
+              .as:
+                TripSearchEvent.Sent(
+                  EmailConfirmation(
+                    Some(email.recipient),
+                    tripOptions,
+                  ),
+                )
+          .handleErrorWith: error =>
+            val message = s"Failed to send email for question: ${input.request.question.abbr}"
+            logger
+              .error(error)(message)
+              .as(TripSearchEvent.Sent(EmailConfirmation.notSent))
+      .handleEventWithError[
+        TripSearchError.NotSettled.type,
         TripSearchState.Sent,
       ]: (_, event) =>
-        val sent = event.asInstanceOf[TripSearchEvent.Sent]
-        TripSearchState.Sent(
-          sent.recipient,
-          sent.options,
-        )
+        event match
+          case TripSearchEvent.Sent(EmailConfirmation(Some(recipient), options)) =>
+            TripSearchState
+              .Sent(
+                recipient,
+                options,
+              )
+              .asRight
+          case _ => TripSearchError.NotSettled.asLeft
       .autoNamed()
 
   private val processBooking: WIO[
@@ -202,25 +224,31 @@ final class TripSearchWorkflow(
         val selection = event.selection
         IO.pure(input.options.exists(_ === selection.tripOption))
           .ifM(
-            ifTrue = bookingService
-              .book(selection)
-              .handleErrorWith {
-                case _: BookingServiceError.DuplicatedBookingId => IO.unit
-                case other => IO.raiseError(other)
-              }
-              .map: _ =>
-                TripSearchEvent.Booked(
-                  BookingConfirmation(
-                    accepted = true,
-                    bookingId = Some(selection.bookingId),
-                  ),
-                ),
-            ifFalse = IO.pure(
-              TripSearchEvent.Booked(
-                BookingConfirmation.notBooked,
-              ),
-            ),
+            ifTrue = Handle
+              .allow[BookingService.Error]:
+                bookingService
+                  .book(selection)
+                  .as(
+                    BookingConfirmation(
+                      accepted = true,
+                      bookingId = Some(selection.bookingId),
+                    ),
+                  )
+              .rescue:
+                case BookingService.Error.DuplicatedBookingId(bookingId) =>
+                  logger
+                    .warn(show"Ignoring duplicated booking, bookingId: $bookingId")
+                    .as(BookingConfirmation.notBooked)
+              .handleErrorWith: error =>
+                val message = show"Failed to book trip for bookingId: ${selection.bookingId}"
+                logger
+                  .error(error)(message)
+                  .as(BookingConfirmation.notBooked)
+            ,
+            ifFalse = IO.pure(BookingConfirmation.notBooked),
           )
+          .map: confirmation =>
+            TripSearchEvent.Booked(confirmation)
       .handleEventWithError[
         TripSearchError.Declined.type,
         TripSearchState.Booked,
@@ -305,8 +333,7 @@ object TripSearchWorkflow:
         accommodations: List[Accommodation],
     )
     case Sent(
-        recipient: Email.Address,
-        options: List[TripOption],
+        confirmation: EmailConfirmation,
     )
     case Booked(
         confirmation: BookingConfirmation,

@@ -7,7 +7,7 @@ import trip_agent.application.agents.tools.AvailabilityLoader.addToScope
 import trip_agent.application.agents.tools.DateExtractor
 import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
 import trip_agent.domain.Flight
-import trip_agent.infrastructure.data.retry.IOExtensions.retryOnError
+import trip_agent.infrastructure.data.retry.IOExtensions.retryOnAnyError
 
 import cats.effect.IO
 import cats.implicits.showInterpolator
@@ -19,6 +19,8 @@ import io.circe.Decoder
 import io.circe.parser.parse
 import org.slf4j.{Logger, LoggerFactory}
 import org.typelevel.log4cats.StructuredLogger
+
+import scala.concurrent.duration.DurationInt
 
 trait FlightsSearchAgent:
   def flightsFor(question: String): IO[List[Flight]]
@@ -78,8 +80,9 @@ object FlightsSearchAgent:
               .asInstanceOf[String],
           ).map(stripCodeFences)
         flights <- flightsFrom(answer)
-      yield flights).retryOnError(
-        handled = classOf[java.net.http.HttpTimeoutException],
+      yield flights).retryOnAnyError(
+        maxRetries = 3,
+        threshold = 2.minutes,
       )
 
   private def flightsFrom(answer: String) =

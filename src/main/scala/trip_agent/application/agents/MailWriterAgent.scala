@@ -5,6 +5,7 @@ import trip_agent.application.agents.tools.EmailExtractor
 import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
 import trip_agent.domain.*
 import trip_agent.domain.TSIDCats.given
+import trip_agent.infrastructure.data.retry.IOExtensions.retryOnAnyError
 
 import cats.Show
 import cats.effect.IO
@@ -18,6 +19,8 @@ import io.circe.{Codec, Encoder}
 import org.http4s.Uri
 import org.slf4j.{Logger, LoggerFactory}
 import org.typelevel.log4cats.StructuredLogger
+
+import scala.concurrent.duration.DurationInt
 
 trait MailWriterAgent:
   def writeEmail(
@@ -43,7 +46,7 @@ object MailWriterAgent:
         accommodations: List[Accommodation],
         request: TripRequest,
     ) =>
-      for
+      (for
         _ <- logger.info(show"Writing email for: \"${request.question}\"")
         recipientEmail <- emailExtractor.emailFrom(request.question)
         tripOptions =
@@ -113,7 +116,10 @@ object MailWriterAgent:
             subject = emailSubjectFrom(request.requestId),
             body = Email.Body.applyUnsafe(emailBody),
           )
-      yield email -> tripOptions.keys.toList
+      yield email -> tripOptions.keys.toList).retryOnAnyError(
+        maxRetries = 3,
+        threshold = 2.minutes,
+      )
 
   private trait MailWriter:
     @SystemMessage(fromResource = "mail_writer/system_message.txt")
