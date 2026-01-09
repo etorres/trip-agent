@@ -66,6 +66,11 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       tripCannotBeFoundTestCaseGen,
     )
 
+  test("should ignore duplicated emails"): (engine, log) =>
+    runStateTest(engine, log)(
+      duplicatedMessageIdTestCaseGen,
+    )
+
   test("should fail with an error when the email cannot be sent"): (engine, log) =>
     runStateTest(engine, log)(
       notSentEmailTestCaseGen,
@@ -106,7 +111,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
     (engine, log) =>
       (testCaseGen, testee) =>
         forall(testCaseGen): testCase =>
-          testResources(engine, testCase.accommodations, testCase.flights, testCase.failureSettings)
+          testResources(engine, testCase)
             .use: (runtime, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef) =>
               for
                 workflowInstance <- runtime.createInstance(
@@ -160,27 +165,28 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       mailSender = FailureRate.alwaysSucceed,
     )
 
-  private def testResources(
+  private def testResources[A](
       engine: WorkflowInstanceEngine,
-      accommodations: Map[String, List[Accommodation]],
-      flights: Map[String, List[Flight]],
-      failureSettings: FailureSettings,
+      testCase: TestCase[A],
   ) =
     for
       (tripSearchWorkflow, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef) <-
         Resource.eval:
           for
             accommodationsStateRef <- Ref.of[IO, AccommodationsSearchAgentState](
-              AccommodationsSearchAgentState.empty.copy(accommodations),
+              AccommodationsSearchAgentState.empty
+                .copy(testCase.accommodations),
             )
             flightsStateRef <- Ref.of[IO, FlightsSearchAgentState](
-              FlightsSearchAgentState.empty.copy(flights),
+              FlightsSearchAgentState.empty
+                .copy(testCase.flights),
             )
             writtenMailsStateRef <- Ref.of[IO, MailWriterAgentState](
               MailWriterAgentState.empty,
             )
             sentMailsStateRef <- Ref.of[IO, MailSenderState](
-              MailSenderState.empty,
+              MailSenderState.empty
+                .copy(testCase.sentMails),
             )
             bookingsStateRef <- Ref.of[IO, BookingServiceState](
               BookingServiceState.empty,
@@ -189,20 +195,20 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
             tripSearchWorkflow = TripSearchWorkflow(
               accommodationsSearchAgent = FakeAccommodationsSearchAgent(
                 accommodationsStateRef,
-                failureSettings.accommodationsSearchAgent,
+                testCase.failureSettings.accommodationsSearchAgent,
               ),
               flightsSearchAgent = FakeFlightsSearchAgent(
                 flightsStateRef,
-                failureSettings.flightsSearchAgent,
+                testCase.failureSettings.flightsSearchAgent,
               ),
               mailWriterAgent = FakeMailWriterAgent(writtenMailsStateRef),
               mailSender = FakeMailSender(
                 sentMailsStateRef,
-                failureSettings.mailSender,
+                testCase.failureSettings.mailSender,
               ),
               bookingService = FakeBookingService(
                 bookingsStateRef,
-                failureSettings.bookingService,
+                testCase.failureSettings.bookingService,
               ),
             )
           yield (tripSearchWorkflow, writtenMailsStateRef, sentMailsStateRef, bookingsStateRef)
@@ -220,6 +226,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request: TripRequest,
       accommodations: Map[String, List[Accommodation]],
       flights: Map[String, List[Flight]],
+      sentMails: List[Email],
       maybeSelection: Option[TripSelection],
       expectedState: TripSearchState,
       otherPossibleState: Option[TripSearchState],
@@ -255,6 +262,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
+      sentMails = List.empty,
       maybeSelection = Some(selection),
       expectedState = TripSearchState.Booked(confirmation),
       otherPossibleState = None,
@@ -282,6 +290,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
         request = request,
         accommodations = Map.empty,
         flights = Map.empty,
+        sentMails = List.empty,
         maybeSelection = None,
         expectedState = TripSearchState.Canceled(
           state = TripSearchState.Empty,
@@ -307,6 +316,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
+      sentMails = List.empty,
       maybeSelection = None,
       expectedState = TripSearchState.Canceled(
         state = TripSearchState.Started(request),
@@ -350,6 +360,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
+      sentMails = List.empty,
       maybeSelection = None,
       expectedState = TripSearchState.Canceled(
         state = TripSearchState.Started(request),
@@ -367,6 +378,37 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       expectedResult = (),
     )
 
+  private lazy val duplicatedMessageIdTestCaseGen =
+    for
+      request <- tripRequestGen()
+      accommodations <- accommodationsGen
+      flights <- flightsGen
+      emailAddress = FakeMailWriterAgent.findEmailUnsafe(request.question)
+      tripOptions = FakeMailWriterAgent.tripOptionsFrom(flights, accommodations)
+      email = Email(
+        messageId = Email.MessageId(request.requestId.value),
+        recipient = emailAddress,
+        subject = MailWriterAgent.emailSubjectFrom(request.requestId),
+        body = FakeMailWriterAgent.emailBody,
+      )
+    yield TestCase(
+      failureSettings = alwaysSucceed,
+      request = request,
+      accommodations = Map(request.question -> accommodations),
+      flights = Map(request.question -> flights),
+      sentMails = List(email),
+      maybeSelection = None,
+      expectedState = TripSearchState.Sent(
+        recipient = emailAddress,
+        options = tripOptions,
+      ),
+      otherPossibleState = None,
+      expectedWrittenMails = List((flights, accommodations, request)),
+      expectedSentMails = List(email),
+      expectedBooking = List.empty,
+      expectedResult = (),
+    )
+
   private lazy val notSentEmailTestCaseGen =
     for
       request <- tripRequestGen()
@@ -379,6 +421,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
+      sentMails = List.empty,
       maybeSelection = None,
       expectedState = TripSearchState.Canceled(
         state = TripSearchState.Found(request, flights, accommodations),
@@ -412,6 +455,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
+      sentMails = List.empty,
       maybeSelection = Some(selection),
       expectedState = TripSearchState.Booked(
         BookingConfirmation.notBooked,
@@ -451,6 +495,7 @@ object TripSearchWorkflowSuite extends IOSuite with Checkers:
       request = request,
       accommodations = Map(request.question -> accommodations),
       flights = Map(request.question -> flights),
+      sentMails = List.empty,
       maybeSelection = Some(selection),
       expectedState = TripSearchState.Booked(
         BookingConfirmation.notBooked,
