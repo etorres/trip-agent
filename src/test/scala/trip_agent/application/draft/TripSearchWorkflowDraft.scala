@@ -1,10 +1,10 @@
 package es.eriktorr
-package trip_agent.application
+package trip_agent.application.draft
 
 import org.camunda.bpm.model.bpmn.Bpmn
-import workflows4s.wio.DraftWorkflowContext.*
 import weaver.FunSuite
 import workflows4s.bpmn.BpmnRenderer
+import workflows4s.wio.DraftWorkflowContext.*
 
 import java.io.File
 
