@@ -36,6 +36,7 @@ lazy val withBaseSettings: Project => Project =
       libraryDependencies ++= Seq(
         "com.47deg" %% "scalacheck-toolbox-datetime" % "0.7.0" % Test,
         "org.typelevel" %% "weaver-cats" % "0.11.3" % Test,
+        "org.typelevel" %% "weaver-discipline" % "0.11.3" % Test,
         "org.typelevel" %% "weaver-scalacheck" % "0.11.3" % Test,
       ),
       Test / envVars := Map(
@@ -87,6 +88,7 @@ lazy val root = (project in file("."))
       "dev.optics" %% "monocle-core" % "3.3.0",
       "io.circe" %% "circe-core" % "0.14.15",
       "io.circe" %% "circe-parser" % "0.14.15",
+      "io.circe" %% "circe-testing" % "0.14.15" % Test,
       "io.hypersistence" % "hypersistence-tsid" % "2.1.4",
       "org.apache.logging.log4j" % "log4j-core" % "2.25.3" % Runtime,
       "org.apache.logging.log4j" % "log4j-layout-template-json" % "2.25.3" % Runtime,

@@ -1,29 +1,19 @@
 package es.eriktorr
 package trip_agent.domain
 
-import io.circe.parser.decode
-import io.circe.syntax.EncoderOps
+import io.circe.testing.{ArbitraryInstances, CodecTests}
 import io.hypersistence.tsid.TSID
-import weaver.SimpleIOSuite
-import weaver.scalacheck.Checkers
+import org.scalacheck.Arbitrary
+import weaver.FunSuite
+import weaver.discipline.Discipline
 
-/** It could be replaced by Circe
-  * [[https://circe.github.io/circe/codecs/testing.html Codec Testing]], once it is available for
-  * the weaver-test.
-  */
-object TSIDCatsSuite extends SimpleIOSuite with Checkers:
-  test("should decode JSON that's known to be good"):
-    forall(requestIdGen): requestId =>
-      whenSuccess(decode[RequestId](rawJsonFrom(requestId))): obtained =>
-        expect.eql(requestId, obtained)
+object TSIDCatsSuite extends FunSuite with Discipline:
+  import Implicits.given
+  val requestIdCodecTests = CodecTests[RequestId]
+  checkAll("RequestId", requestIdCodecTests.codec)
 
-  test("should produce the expected results"):
-    forall(requestIdGen): requestId =>
-      expect.eql(rawJsonFrom(requestId), requestId.asJson.noSpaces)
-
-  private lazy val requestIdGen =
-    val tsid = TSID.Factory.getTsid256
-    RequestId(tsid)
-
-  private def rawJsonFrom(requestId: RequestId) =
-    s"""{"value":"${requestId.value.toString}"}"""
+  object Implicits extends ArbitraryInstances:
+    given Arbitrary[RequestId] =
+      Arbitrary:
+        val tsid = TSID.Factory.getTsid256
+        RequestId(tsid)
