@@ -105,11 +105,8 @@ object OllamaApiClient:
           cursor.downField("response").as[String],
         ).mapN(GenerateResponse.apply)
 
-  sealed abstract class ApiError(message: String) extends HandledError(message)
-
-  object ApiError:
-    final case class GenerateFailed(model: OllamaConfig.OllamaModel)
+  enum ApiError(val message: String) extends HandledError(message):
+    case GenerateFailed(model: OllamaConfig.OllamaModel)
         extends ApiError(show"Failed to load the model $model into memory")
-
-    final case class PullFailed(model: OllamaConfig.OllamaModel)
+    case PullFailed(model: OllamaConfig.OllamaModel)
         extends ApiError(show"Failed to download the model $model from the ollama library")

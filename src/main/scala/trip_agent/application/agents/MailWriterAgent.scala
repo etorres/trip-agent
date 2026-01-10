@@ -2,10 +2,10 @@ package es.eriktorr
 package trip_agent.application.agents
 
 import trip_agent.application.agents.tools.EmailExtractor
-import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
 import trip_agent.domain.*
 import trip_agent.domain.TSIDCats.given
 import trip_agent.infrastructure.data.retry.IOExtensions.retryOnAnyError
+import trip_agent.infrastructure.text.TemplateVariables.variablesFrom
 
 import cats.Show
 import cats.effect.IO

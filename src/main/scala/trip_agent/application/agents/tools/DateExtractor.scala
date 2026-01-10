@@ -1,7 +1,7 @@
 package es.eriktorr
 package trip_agent.application.agents.tools
 
-import trip_agent.application.agents.tools.AnswerProcessor.stripCodeFences
+import trip_agent.infrastructure.text.MarkdownCleaner.stripCodeFences
 
 import cats.arrow.Arrow
 import cats.effect.IO

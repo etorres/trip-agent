@@ -8,8 +8,8 @@ import trip_agent.application.agents.{
 }
 import trip_agent.domain.*
 import trip_agent.domain.Email.findEmail
-import trip_agent.infrastructure.StringUtils.abbr
 import trip_agent.infrastructure.network.PekkoCirceSerializer
+import trip_agent.infrastructure.text.StringShortener.abbr
 
 import cats.derived.*
 import cats.effect.IO

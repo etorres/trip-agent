@@ -1,7 +1,7 @@
 package es.eriktorr
-package trip_agent.application.agents.tools
+package trip_agent.infrastructure.text
 
-object AnswerProcessor:
+object MarkdownCleaner:
   def stripCodeFences(
       raw: String,
   ): String =

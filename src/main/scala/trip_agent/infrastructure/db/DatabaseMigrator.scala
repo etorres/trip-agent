@@ -30,15 +30,12 @@ final class DatabaseMigrator(
       flyway.migrate()
     .flatMap:
         case errorResult: MigrateErrorResult =>
-          IO.raiseError(DatabaseMigrator.MigrationFailed(errorResult))
+          IO.raiseError(DatabaseMigrator.Error.MigrationFailed(errorResult))
         case other => IO.unit
 
 object DatabaseMigrator:
-  sealed abstract class DatabaseMigrationError(
-      message: String,
-  ) extends HandledError(message)
-
-  final case class MigrationFailed(errorResult: MigrateErrorResult)
-      extends DatabaseMigrationError(
-        s"code: ${errorResult.error.errorCode}, message: ${errorResult.error.message}, cause: ${errorResult.error.cause}",
-      )
+  enum Error(val message: String) extends HandledError(message):
+    case MigrationFailed(errorResult: MigrateErrorResult)
+        extends Error(
+          s"code: ${errorResult.error.errorCode}, message: ${errorResult.error.message}, cause: ${errorResult.error.cause}",
+        )

@@ -2,12 +2,12 @@ package es.eriktorr
 package trip_agent.application.agents
 
 import trip_agent.application.AccommodationService
-import trip_agent.application.agents.tools.AnswerProcessor.stripCodeFences
 import trip_agent.application.agents.tools.AvailabilityLoader.addToScope
 import trip_agent.application.agents.tools.DateExtractor
-import trip_agent.application.agents.tools.LangChain4jUtils.variablesFrom
 import trip_agent.domain.Accommodation
 import trip_agent.infrastructure.data.retry.IOExtensions.retryOnAnyError
+import trip_agent.infrastructure.text.MarkdownCleaner.stripCodeFences
+import trip_agent.infrastructure.text.TemplateVariables.variablesFrom
 
 import cats.effect.IO
 import cats.implicits.showInterpolator

@@ -1,7 +1,8 @@
 package es.eriktorr
-package trip_agent.application.agents.tools
+package trip_agent.infrastructure.text
 
 import trip_agent.domain.TripSearchGenerators.{accommodationGen, flightGen}
+import trip_agent.infrastructure.text.MarkdownCleaner
 import trip_agent.spec.StringGenerators.alphaNumericStringBetween
 
 import io.circe.syntax.EncoderOps
@@ -9,10 +10,10 @@ import org.scalacheck.Gen
 import weaver.SimpleIOSuite
 import weaver.scalacheck.Checkers
 
-object AnswerProcessorSuite extends SimpleIOSuite with Checkers:
+object MarkdownCleanerSuite extends SimpleIOSuite with Checkers:
   test("Should strip code fences from text"):
     forall(testCaseGen): (expected, raw) =>
-      val obtained = AnswerProcessor.stripCodeFences(raw)
+      val obtained = MarkdownCleaner.stripCodeFences(raw)
       expect.eql(expected, obtained)
 
   private lazy val testCaseGen =

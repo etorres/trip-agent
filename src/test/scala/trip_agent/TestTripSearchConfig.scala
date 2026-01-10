@@ -3,9 +3,9 @@ package trip_agent
 
 import trip_agent.TripSearchConfig.OllamaConfig
 import trip_agent.TripSearchConfig.OllamaConfig.OllamaModel
+import trip_agent.infrastructure.security.Secret
 
 import com.comcast.ip4s.{Host, Port}
-import es.eriktorr.trip_agent.infrastructure.security.Secret
 
 object TestTripSearchConfig:
   @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))

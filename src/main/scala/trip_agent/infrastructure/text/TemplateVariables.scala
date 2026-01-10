@@ -1,10 +1,10 @@
 package es.eriktorr
-package trip_agent.application.agents.tools
+package trip_agent.infrastructure.text
 
 import java.util.Map as JavaMap
 import scala.jdk.CollectionConverters.given
 
-object LangChain4jUtils:
+object TemplateVariables:
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   def variablesFrom(
       first: (String, String),
