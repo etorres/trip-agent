@@ -40,3 +40,5 @@ object LoggingSuite extends SimpleIOSuite:
       message: String,
   ) derives Codec,
         Eq
+
+  override def maxParallelism = 1
